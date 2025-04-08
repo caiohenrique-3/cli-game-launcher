@@ -23,8 +23,8 @@ func RunNative() error {
 	}
 
 	// https://stackoverflow.com/a/62630988
-	// Hmmm...
 	for {
+		// Try optimizing size of this slice.
 		tmp := make([]byte, 32)
 		_, err := stdout.Read(tmp)
 		fmt.Print(string(tmp))
