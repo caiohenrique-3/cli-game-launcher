@@ -1,25 +1,32 @@
 package main
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
-// Handles the command-line arguments and commands.
-func readArgs() {
+func handleCommandLine() error {
 	argsWithoutProg := os.Args[1:]
 	if len(argsWithoutProg) == 0 {
 		showHelp()
 	}
 
+	// Bench pass by value vs by ref with heap allocations
 	for n := range len(argsWithoutProg) {
 		switch argsWithoutProg[n] {
 		case "--help", "-h", "help":
 			showHelp()
-			return
+			return nil
 		case "add":
 			addGamePrompt()
-			return
+			return nil
 		default:
 			showUsageOnInvalidOption(argsWithoutProg[n])
-			return
+			var ErrInvalidOption = fmt.Errorf(
+				"invalid command-line argument: '%v'", argsWithoutProg[n])
+			return ErrInvalidOption
 		}
 	}
+
+	return nil
 }
