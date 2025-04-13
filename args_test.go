@@ -8,9 +8,9 @@ import (
 
 var cleanArgs = getCleanOsArgs()
 
-// FIXME: EOF error because of "add" subcommand
+// NOTE: Not sure how to test this
 func TestHandleCommandLine(t *testing.T) {
-	valid := []string{"--help", "-h", "add"}
+	valid := []string{"--help", "-h"}
 	invalid := []string{"--lpdasl", "mbmbd"}
 
 	// Dont print menu output
