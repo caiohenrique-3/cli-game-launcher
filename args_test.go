@@ -8,6 +8,7 @@ import (
 
 var cleanArgs = getCleanOsArgs()
 
+// FIXME: EOF error because of "add" subcommand
 func TestHandleCommandLine(t *testing.T) {
 	valid := []string{"--help", "-h", "add"}
 	invalid := []string{"--lpdasl", "mbmbd"}

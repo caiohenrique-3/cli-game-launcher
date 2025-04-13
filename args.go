@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 )
@@ -18,7 +19,7 @@ func handleCommandLine() error {
 			showHelp()
 			return nil
 		case "add":
-			addGamePrompt()
+			addGamePrompt(bufio.NewReader(os.Stdin))
 			return nil
 		default:
 			showUsageOnInvalidOption(argsWithoutProg[n])
