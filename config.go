@@ -18,7 +18,6 @@ type Game struct {
 }
 
 // Loads config.json and appends a new Game entry to the file.
-// TODO: Tests for saveGameToConfig()
 func saveGameToConfig(gameName string, pathToExecutable string) {
 	configFile := filepath.Join(programHome, "config.json")
 
@@ -35,7 +34,7 @@ func saveGameToConfig(gameName string, pathToExecutable string) {
 	// File is empty
 	if len(f) == 0 {
 		arr := [1]*Game{game}
-		jsonData, err := json.Marshal(arr)
+		jsonData, err := json.MarshalIndent(arr, "", "    ")
 		if err != nil {
 			log.Fatal(err)
 			return
@@ -58,7 +57,7 @@ func saveGameToConfig(gameName string, pathToExecutable string) {
 
 		fmt.Println("[DEBUG] dat after:", newDat)
 
-		b, err := json.Marshal(newDat)
+		b, err := json.MarshalIndent(newDat, "", "    ")
 		if err != nil {
 			log.Fatal(err)
 		}
