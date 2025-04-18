@@ -59,7 +59,7 @@ func addGamePrompt(reader *bufio.Reader) {
 	fmt.Printf("\n[DEBUG] name: %v; path: %v, exists: %v\n",
 		gameName, pathToExecutable, b)
 
-	saveGameToConfig(gameName, pathToExecutable)
+	saveGameToConfig(gameName, pathToExecutable, programHome)
 }
 
 func fileExists(filename string) bool {
