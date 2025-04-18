@@ -1,5 +1,4 @@
-// Contains functions related to running native programs.
-package run
+package main
 
 import (
 	"fmt"
@@ -8,7 +7,7 @@ import (
 )
 
 // Executes a command and prints the output.
-func RunNative() error {
+func runNative() error {
 	cmd := exec.Command("./game.sh")
 	stdout, err := cmd.StdoutPipe()
 	cmd.Stdin = os.Stdin
