@@ -2,9 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
-	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -39,54 +36,40 @@ func saveGameToConfig(gameName string, pathToExecutable string,
 	configFileParentDir string) {
 	configFile := filepath.Join(configFileParentDir, "config.json")
 
-	f, err := os.ReadFile(configFile)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			createEmptyConfigFileAt(configFileParentDir)
-		} else {
-			log.Fatal(err)
-		}
+	if !fileExists(configFile) {
+		createEmptyConfigFileAt(configFileParentDir)
 	}
+
+	f := loadConfigFile(configFileParentDir)
 
 	game := &Game{
 		Name:             gameName,
 		PathToExecutable: pathToExecutable,
 	}
 
-	// File is empty
-	// TODO: Extract this
-	if len(f) == 0 {
-		arr := [1]*Game{game}
-		jsonData, err := json.MarshalIndent(arr, "", "    ")
-		if err != nil {
-			log.Fatal(err)
-		}
-		err = os.WriteFile(configFile, jsonData, os.ModePerm)
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		dat := []Game{}
-		err := json.Unmarshal(f, &dat)
-		if err != nil {
-			log.Fatal(err)
-		}
+	appendNewGameToConfigFile(f, game, configFile)
+}
 
-		fmt.Println("[DEBUG] dat before:", dat)
+// Unmarshals fileData, appends a new game to it and saves the
+// new file in pathToConfigFile.
+func appendNewGameToConfigFile(fileData []byte, game *Game,
+	pathToConfigFile string) {
+	dat := []Game{}
+	err := json.Unmarshal(fileData, &dat)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-		newDat := append(dat, *game)
+	dat = append(dat, *game)
 
-		fmt.Println("[DEBUG] dat after:", newDat)
+	b, err := json.MarshalIndent(dat, "", "    ")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-		b, err := json.MarshalIndent(newDat, "", "    ")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = os.WriteFile(configFile, b, os.ModePerm)
-		if err != nil {
-			log.Fatal(err)
-		}
+	err = os.WriteFile(pathToConfigFile, b, os.ModePerm)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
 

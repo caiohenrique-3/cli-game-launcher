@@ -3,78 +3,117 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
 
-func TestSaveGameToConfigNotEmpty(t *testing.T) {
-	f, err := createTempFileOnOsTempDir()
-	if err != nil {
-		t.Error()
-	}
-	defer f.Close()
-
-	testDir := os.TempDir()
-
-	saveGameToConfig("Test Game", f.Name(), testDir)
-
-	savedConfigData := loadConfigFile(testDir)
-	dat := []Game{}
-	err = json.Unmarshal(savedConfigData, &dat)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(dat) == 0 {
-		t.Error("unmarshaled []Game is empty!")
-	}
-}
-
-func TestSaveGameToConfigAppendsCorrectly(t *testing.T) {
-	testDir := os.TempDir()
-	err := deleteFile(filepath.Join(testDir, "config.json"))
-	if err != nil {
-		t.Error(err)
-	}
-
-	f, err := createTempFileOnOsTempDir()
-	if err != nil {
-		t.Error(err)
-	}
-	defer f.Close()
-
-	saveGameToConfig("Test Game", f.Name(), testDir)
-	saveGameToConfig("Test Game 2", f.Name(), testDir)
-
-	foo := loadConfigFile(testDir)
-	dat := []Game{}
-	err = json.Unmarshal(foo, &dat)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(dat) != 2 {
-		t.Errorf("unmarshaled data has len %v, want %v", len(dat), 2)
-	}
-}
-
-func TestSaveGameToConfigCreatesConfigFile(t *testing.T) {
-	configFile := filepath.Join(os.TempDir(), "config.json")
+func TestAppendNewGameToConfigFileAppendsCorrectly(t *testing.T) {
+	testTempFile, testDir := setupTest(t)
+	configFile := filepath.Join(testDir, "config.json")
 
 	err := deleteFile(configFile)
 	if err != nil {
 		t.Error(err)
 	}
 
-	testDir := os.TempDir()
+	createEmptyConfigFileAt(testDir)
 
-	f, err := createTempFileOnOsTempDir()
-	if err != nil {
-		t.Error()
+	gameName := "Test Game"
+	gamePath := testTempFile.Name()
+	game := &Game{
+		Name:             gameName,
+		PathToExecutable: gamePath,
 	}
-	defer f.Close()
+
+	var f []byte
+	for range 3 {
+		f = loadConfigFile(testDir)
+		appendNewGameToConfigFile(f, game, configFile)
+	}
+
+	f = loadConfigFile(testDir)
+
+	data := []Game{}
+	err = json.Unmarshal(f, &data)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(data) != 3 {
+		t.Errorf("unmarshaled data has len %v, want %v",
+			len(data), 2)
+	}
+
+	for i, v := range data {
+		if v.Name != gameName {
+			t.Errorf("key %v: want %v; got %v",
+				i, gameName, v.Name)
+		}
+
+		if v.PathToExecutable != gamePath {
+			t.Errorf("key %v: want %v; got %v",
+				i, gamePath, v.PathToExecutable)
+		}
+	}
+
+}
+
+func TestAppendNewGameToConfigFileBadJson(t *testing.T) {
+	if os.Getenv("BE_CRASHER") == "1" {
+		testTempFile, testDir := setupTest(t)
+		configFile := filepath.
+			Join(testDir, "config.json")
+
+		err := deleteFile(configFile)
+		if err != nil {
+			t.Error(err)
+		}
+
+		createEmptyConfigFileAt(testDir)
+
+		testInput := "TESTTESTTEST1234567890"
+
+		err = os.WriteFile(configFile,
+			[]byte(testInput), os.ModePerm)
+		if err != nil {
+			t.Error("writing bad input on file:", err)
+			return
+		}
+
+		gameName := "Test Game"
+		gamePath := testTempFile.Name()
+		game := &Game{
+			Name:             gameName,
+			PathToExecutable: gamePath,
+		}
+
+		f := loadConfigFile(testDir)
+		appendNewGameToConfigFile(f, game, configFile)
+	}
+
+	cmd := exec.Command(os.Args[0],
+		"-test.run=TestAppendNewGameToConfigFileBadJson")
+	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
+	err := cmd.Run()
+	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
+		return
+	}
+
+	t.Fatalf("process ran with err %v; want exit status 1", err)
+}
+
+func TestSaveGameToConfigCreatesConfigFileIfMissing(t *testing.T) {
+	f, testDir := setupTest(t)
+	configFile := filepath.Join(testDir, "config.json")
+
+	err := deleteFile(configFile)
+	if err != nil {
+		t.Error(err)
+	}
 
 	saveGameToConfig("Test Game", f.Name(), testDir)
 
-	if fileExists(configFile) != true {
+	if !fileExists(configFile) {
 		t.Error("config.json was not created!")
 	}
 }
@@ -87,7 +126,6 @@ func TestCreateEmptyConfigFile(t *testing.T) {
 	}
 
 	createEmptyConfigFileAt(os.TempDir())
-
 	f := loadConfigFile(os.TempDir())
 
 	dat := []Game{}
@@ -97,8 +135,21 @@ func TestCreateEmptyConfigFile(t *testing.T) {
 	}
 
 	if len(dat) != 0 {
-		t.Error("config.json data not empty!")
+		t.Error("config.json unmarshaled data is not empty!")
 	}
+}
+
+// Returns a temporary file and its parent dir.
+func setupTest(t *testing.T) (*os.File, string) {
+	f, err := createTempFileOnOsTempDir()
+	if err != nil {
+		t.Error("error creating temp file:", err)
+	}
+	defer f.Close()
+
+	testDir := os.TempDir()
+
+	return f, testDir
 }
 
 // If file exists, deletes it.
