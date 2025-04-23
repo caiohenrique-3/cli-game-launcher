@@ -2,21 +2,22 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestAddGamePromptFileNotFound(t *testing.T) {
 	if os.Getenv("BE_CRASHER") == "1" {
-		input := "Test\nTest\n"
+		input := "Test1234567890\nTest Game\n"
 		r := bufio.NewReader(strings.NewReader(input))
 		addGamePrompt(r)
 		return
 	}
-	fmt.Println(os.Stdout == nil)
+
 	cmd := exec.Command(os.Args[0],
 		"-test.run=TestAddGamePromptFileNotFound")
 	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
@@ -28,31 +29,45 @@ func TestAddGamePromptFileNotFound(t *testing.T) {
 }
 
 func TestAddGameExecutableGoodEnding(t *testing.T) {
-	input := "Test Game Name\n./menu_test.go\n"
+	f, err := createTempFileOnOsTempDir()
+	if err != nil {
+		t.Error(err)
+	}
+
+	input := "Test Game Name\n" + f.Name() + "\n"
 	r := bufio.NewReader(strings.NewReader(input))
 	addGamePrompt(r)
 }
 
 func TestAddGameExecutablePathWithSpaces(t *testing.T) {
-	input := "Test Game Name\n./tests/Dir With Spaces/game\n"
-	r := bufio.NewReader(strings.NewReader(input))
-	addGamePrompt(r)
-}
+	testDir, err := os.MkdirTemp("", "Dir With Spaces")
+	if err != nil {
+		t.Error(err)
+	}
 
-func TestAddGameExecutablePathWithBackslash(t *testing.T) {
-	input := "Test Game Name\n./tests/Dir\\ With\\ Spaces/game\n"
+	f, err := os.CreateTemp(testDir, "TESTFILE")
+	if err != nil {
+		t.Error(err)
+	}
+	defer f.Close()
+
+	input := "Test Game Name\n" + f.Name() + "\n"
 	r := bufio.NewReader(strings.NewReader(input))
 	addGamePrompt(r)
 }
 
 func TestAddGameExecutablePathIsADirectory(t *testing.T) {
 	if os.Getenv("BE_CRASHER") == "1" {
-		input := "Test Game Name\n./tests/\n"
+		testDir, err := os.MkdirTemp("", "TESTDIR")
+		if err != nil {
+			t.Error(err)
+		}
+
+		input := "Test Game Name\n" + testDir + "\n"
 		r := bufio.NewReader(strings.NewReader(input))
 		addGamePrompt(r)
 		return
 	}
-	fmt.Println(os.Stdout == nil)
 	cmd := exec.Command(os.Args[0],
 		"-test.run=TestAddGameExecutablePathIsADirectory")
 	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
@@ -64,31 +79,69 @@ func TestAddGameExecutablePathIsADirectory(t *testing.T) {
 }
 
 func TestAddGameExecutableExpandsEnvVariables(t *testing.T) {
-	input := "Test Game Name\n$HOME/.zshrc\n"
-	r := bufio.NewReader(strings.NewReader(input))
-	addGamePrompt(r)
+	if os.Getenv("TEST_TMPDIR") != "" {
+		f, err := createTempFileOnOsTempDir()
+		if err != nil {
+			t.Error("error creating temp file:", err)
+		}
+
+		fileName := filepath.Base(f.Name())
+
+		input := "Test Game Name\n" +
+			"$TEST_TMPDIR/" + fileName + "\n"
+		r := bufio.NewReader(strings.NewReader(input))
+		addGamePrompt(r)
+		return
+	}
+
+	cmd := exec.Command(os.Args[0],
+		"-test.run=TestAddGameExecutableExpandsEnvVariables")
+	cmd.Env = append(os.Environ(), "TEST_TMPDIR="+os.TempDir())
+	err := cmd.Run()
+	if err != nil {
+		t.Fatalf("process ran with err %v; want exit status 0", err)
+	}
 }
 
-func TestAddGameExecutableExpandsTilde(t *testing.T) {
-	input := "Test Game Name\n~/.zshrc\n"
-	r := bufio.NewReader(strings.NewReader(input))
-	addGamePrompt(r)
+func TestGetCleanPathExpandsTilde(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		return
+	}
+
+	pathInput := "~/"
+	s := getCleanPath(pathInput)
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Error(err)
+	}
+
+	if s != home {
+		t.Error("tilde did not expand user home dir!")
+	}
+
 }
 
 func TestFileExistsTrue(t *testing.T) {
-	b := fileExists("./menu_test.go")
-	if b != true {
+	f, err := createTempFileOnOsTempDir()
+	if err != nil {
+		t.Error(err)
+	}
+
+	b := fileExists(f.Name())
+	if !b {
 		t.Errorf("error: %v; want true", b)
 	}
 }
 
 func TestExistsFalse(t *testing.T) {
 	b := fileExists("/mint/dragon/path/three")
-	if b != false {
+	if b {
 		t.Errorf("error: %v; want false", b)
 	}
 }
 
+// TODO: Remove benchmarks
 func BenchmarkAddGameExecutable(b *testing.B) {
 	os.Stdout = nil
 	os.Stderr = nil

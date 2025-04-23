@@ -35,7 +35,6 @@ func showUsageOnInvalidOption(s string) {
 // a configuration file.
 func addGamePrompt(reader *bufio.Reader) {
 	fmt.Print("Enter game name: ")
-
 	gameName, err := reader.ReadString('\n')
 	if err != nil {
 		log.Fatal(err)
@@ -73,6 +72,7 @@ func fileExists(filename string) bool {
 // Removes backslashes from path (if not Windows), expands variables,
 // expands tilde and makes the path absolute.
 func getCleanPath(s string) string {
+	// TODO: Remove backslashes
 	if runtime.GOOS != "windows" {
 		s = strings.ReplaceAll(s, "\\", "")
 	}
