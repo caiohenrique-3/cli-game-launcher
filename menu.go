@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -72,10 +71,6 @@ func fileExists(filename string) bool {
 // Removes backslashes from path (if not Windows), expands variables,
 // expands tilde and makes the path absolute.
 func getCleanPath(s string) string {
-	// TODO: Remove backslashes
-	if runtime.GOOS != "windows" {
-		s = strings.ReplaceAll(s, "\\", "")
-	}
 	if strings.Contains(s, "$") {
 		s = os.ExpandEnv(s)
 	}
