@@ -73,6 +73,38 @@ func appendNewGameToConfigFile(fileData []byte, game *Game,
 	}
 }
 
+// Removes the selected entry from config.json file.
+func removeGameFromConfig(index int, configFileParentDir string) {
+	configFile := filepath.Join(configFileParentDir, "config.json")
+	games := []Game{}
+	json.Unmarshal(loadConfigFile(configFileParentDir), &games)
+
+	if len(games) == 0 {
+		log.Fatal("No games found!")
+	}
+
+	if index > len(games)-1 || index < 0 {
+		log.Fatal("Invalid option!")
+	}
+
+	newGames := []Game{}
+	for i, k := range games {
+		if i != index {
+			newGames = append(newGames, k)
+		}
+	}
+
+	jsonData, err := json.MarshalIndent(newGames, "", "    ")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = os.WriteFile(configFile, jsonData, os.ModePerm)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 func loadConfigFile(configFileParentDir string) []byte {
 	configFile := filepath.Join(configFileParentDir, "config.json")
 	data, err := os.ReadFile(configFile)

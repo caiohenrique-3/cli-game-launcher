@@ -12,7 +12,6 @@ func handleCommandLine() error {
 		showHelp()
 	}
 
-	// Bench pass by value vs by ref with heap allocations
 	for n := range len(argsWithoutProg) {
 		switch argsWithoutProg[n] {
 		case "--help", "-h", "help":
@@ -20,6 +19,9 @@ func handleCommandLine() error {
 			return nil
 		case "add":
 			addGamePrompt(bufio.NewReader(os.Stdin))
+			return nil
+		case "remove":
+			removeGamePrompt(bufio.NewReader(os.Stdin))
 			return nil
 		default:
 			showUsageOnInvalidOption(argsWithoutProg[n])

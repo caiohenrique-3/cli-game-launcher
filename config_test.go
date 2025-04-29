@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -139,6 +140,92 @@ func TestCreateEmptyConfigFile(t *testing.T) {
 	}
 }
 
+func TestRemoveGameFromConfig(t *testing.T) {
+	f, testDir := setupTest(t)
+
+	err := deleteFile(filepath.Join(testDir, "config.json"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	for i := range 10 {
+		saveGameToConfig(
+			fmt.Sprintf("Test Game %v", i),
+			f.Name(),
+			testDir)
+	}
+
+	removeGameFromConfig(0, testDir)
+	removeGameFromConfig(0, testDir)
+	removeGameFromConfig(0, testDir)
+
+	games := []Game{}
+	err = json.Unmarshal(loadConfigFile(testDir), &games)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(games) != 7 {
+		t.Errorf("want length=%v; got length=%v", 7, len(games))
+	}
+
+	for _, k := range games {
+		if k.Name == "Test Game 0" ||
+			k.Name == "Test Game 1" ||
+			k.Name == "Test Game 2" {
+			t.Errorf("%v: was not deleted!", k.Name)
+		}
+	}
+}
+
+func TestRemoveGameFromConfigEmptyGames(t *testing.T) {
+	if os.Getenv("BE_CRASHER") == "1" {
+		err := deleteFile(filepath.
+			Join(os.TempDir(), "config.json"))
+		if err != nil {
+			t.Error(err)
+		}
+
+		createEmptyConfigFileAt(os.TempDir())
+		removeGameFromConfig(0, os.TempDir())
+	}
+
+	cmd := exec.Command(os.Args[0],
+		"-test.run=TestRemoveGameFromConfigEmptyGames")
+	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
+	err := cmd.Run()
+	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
+		return
+	}
+
+	t.Fatalf("process ran with err %v; want exit status 1", err)
+}
+
+func TestRemoveGameFromConfigInvalidOption(t *testing.T) {
+	if os.Getenv("BE_CRASHER") == "1" {
+		f, testDir := setupTest(t)
+
+		err := deleteFile(filepath.
+			Join(os.TempDir(), "config.json"))
+		if err != nil {
+			t.Error(err)
+		}
+
+		saveGameToConfig("Test Game", f.Name(), testDir)
+		removeGameFromConfig(2, testDir)
+	}
+
+	cmd := exec.Command(os.Args[0],
+		"-test.run=TestRemoveGameFromConfigInvalidOption")
+	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
+	err := cmd.Run()
+	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
+		return
+	}
+
+	t.Fatalf("process ran with err %v; want exit status 1", err)
+}
+
 // Returns a temporary file and its parent dir.
 func setupTest(t *testing.T) (*os.File, string) {
 	f, err := createTempFileOnOsTempDir()
@@ -148,6 +235,8 @@ func setupTest(t *testing.T) (*os.File, string) {
 	defer f.Close()
 
 	testDir := os.TempDir()
+
+	// TODO: Clean config.json from tmp dir before tests
 
 	return f, testDir
 }

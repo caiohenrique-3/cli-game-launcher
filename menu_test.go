@@ -2,6 +2,9 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -138,5 +141,76 @@ func TestExistsFalse(t *testing.T) {
 	b := fileExists("/mint/dragon/path/three")
 	if b {
 		t.Errorf("error: %v; want false", b)
+	}
+}
+
+func TestListGamesNumbered(t *testing.T) {
+	f, testDir := setupTest(t)
+
+	err := deleteFile(filepath.Join(testDir, "config.json"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	createEmptyConfigFileAt(testDir)
+
+	for range 3 {
+		saveGameToConfig("Test Game", f.Name(), testDir)
+	}
+
+	games := []Game{}
+	err = json.Unmarshal(loadConfigFile(testDir), &games)
+	if err != nil {
+		t.Error(err)
+	}
+
+	var want string
+	for i, game := range games {
+		want = want + fmt.Sprintf("[%v] %v\n", i, game.Name)
+	}
+
+	got := captureOutput(func() {
+		listGamesNumbered(testDir)
+	})
+
+	if got != want {
+		t.Errorf("wanted: %v; got: %v", want, got)
+	}
+}
+
+func captureOutput(f func()) string {
+	orig := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	f()
+	os.Stdout = orig
+	w.Close()
+	out, _ := io.ReadAll(r)
+	return string(out)
+}
+
+func TestRemoveGamePrompt(t *testing.T) {
+	f, testDir := setupTest(t)
+
+	err := deleteFile(filepath.Join(testDir, "config.json"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	saveGameToConfig("Test Game", f.Name(), testDir)
+	input := "0\n"
+	r := bufio.NewReader(strings.NewReader(input))
+	orig := programHome
+	programHome = testDir
+
+	removeGamePrompt(r)
+	programHome = orig
+
+	games := []Game{}
+	json.Unmarshal(loadConfigFile(testDir), &games)
+	got := len(games)
+	want := 0
+	if got != want {
+		t.Errorf("want length=%v, got length=%v", want, got)
 	}
 }
