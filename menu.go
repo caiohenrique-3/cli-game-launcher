@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -103,38 +102,4 @@ func listGamesNumbered(parentDir string) {
 	}
 
 	fmt.Print(s)
-}
-
-func fileExists(filename string) bool {
-	info, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
-}
-
-// Removes backslashes from path (if not Windows), expands variables,
-// expands tilde and makes the path absolute.
-func getCleanPath(s string) string {
-	if strings.Contains(s, "$") {
-		s = os.ExpandEnv(s)
-	}
-	if strings.HasPrefix(s, "~/") {
-		userHomeDir, err := os.UserHomeDir()
-		if err != nil {
-			log.Fatal(err)
-		}
-		s = filepath.Join(userHomeDir, s[1:])
-
-	}
-
-	if !filepath.IsAbs(s) {
-		s, err := filepath.Abs(s)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		return s
-	}
-	return s
 }

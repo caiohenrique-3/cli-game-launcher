@@ -116,25 +116,6 @@ func TestAddGamePromptExpandsEnvVariables(t *testing.T) {
 	}
 }
 
-func TestGetCleanPathExpandsTilde(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		return
-	}
-
-	pathInput := "~/"
-	s := getCleanPath(pathInput)
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Error(err)
-	}
-
-	if s != home {
-		t.Error("tilde did not expand user home dir!")
-	}
-
-}
-
 func TestFileExistsTrue(t *testing.T) {
 	f, err := createTempFileOnOsTempDir()
 	if err != nil {
