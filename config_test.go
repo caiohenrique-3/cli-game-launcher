@@ -225,39 +225,3 @@ func TestRemoveGameFromConfigInvalidOption(t *testing.T) {
 
 	t.Fatalf("process ran with err %v; want exit status 1", err)
 }
-
-// Returns a temporary file and its parent dir.
-func setupTest(t *testing.T) (*os.File, string) {
-	f, err := createTempFileOnOsTempDir()
-	if err != nil {
-		t.Error("error creating temp file:", err)
-	}
-	defer f.Close()
-
-	testDir := os.TempDir()
-
-	// TODO: Clean config.json from tmp dir before tests
-
-	return f, testDir
-}
-
-// If file exists, deletes it.
-func deleteFile(path string) error {
-	if fileExists(path) {
-		err := os.Remove(path)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func createTempFileOnOsTempDir() (*os.File, error) {
-	// empty string means use os.TempDir() return value
-	f, err := os.CreateTemp("", "test_file")
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return f, nil // calling .name() on this is safe after close
-}
