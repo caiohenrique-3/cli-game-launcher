@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,14 +29,14 @@ func deleteFile(path string) error {
 
 // Removes backslashes from path (if not Windows), expands variables,
 // expands tilde and makes the path absolute.
-func getCleanPath(s string) string {
+func getCleanPath(s string) (string, error) {
 	if strings.Contains(s, "$") {
 		s = os.ExpandEnv(s)
 	}
 	if strings.HasPrefix(s, "~/") {
 		userHomeDir, err := os.UserHomeDir()
 		if err != nil {
-			log.Fatal(err)
+			return s, err
 		}
 		s = filepath.Join(userHomeDir, s[1:])
 
@@ -46,11 +45,10 @@ func getCleanPath(s string) string {
 	if !filepath.IsAbs(s) {
 		s, err := filepath.Abs(s)
 		if err != nil {
-			log.Fatal(err)
+			return s, err
 		}
 
-		return s
+		return s, nil
 	}
-	return s
+	return s, nil
 }
-

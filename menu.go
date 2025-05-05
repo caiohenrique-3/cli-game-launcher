@@ -34,7 +34,7 @@ func showUsageOnInvalidOption(s string) {
 // Asks the user for the path to a game's executable
 // file and its name and saves this info in
 // a configuration file.
-func addGamePrompt(reader *bufio.Reader) {
+func addGamePrompt(reader *bufio.Reader) error {
 	fmt.Print("Enter game name: ")
 	gameName, err := reader.ReadString('\n')
 	if err != nil {
@@ -49,7 +49,10 @@ func addGamePrompt(reader *bufio.Reader) {
 
 	gameName = strings.TrimSpace(gameName)
 	pathToExecutable = strings.TrimSpace(pathToExecutable)
-	pathToExecutable = getCleanPath(pathToExecutable)
+	pathToExecutable, err = getCleanPath(pathToExecutable)
+	if err != nil {
+		return err
+	}
 
 	b := fileExists(pathToExecutable)
 	if !b {
@@ -60,6 +63,8 @@ func addGamePrompt(reader *bufio.Reader) {
 		gameName, pathToExecutable, b)
 
 	saveGameToConfig(gameName, pathToExecutable, programHome)
+
+	return nil
 }
 
 // Shows the list of game entries in the config file and removes the user chosen option.

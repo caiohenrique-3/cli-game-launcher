@@ -12,7 +12,10 @@ func TestGetCleanPathExpandsTilde(t *testing.T) {
 	}
 
 	pathInput := "~/"
-	s := getCleanPath(pathInput)
+	s, err := getCleanPath(pathInput)
+	if err != nil {
+		t.Error(err)
+	}
 
 	home, err := os.UserHomeDir()
 	if err != nil {
