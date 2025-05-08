@@ -3,12 +3,15 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
 )
+
+// TODO: will be moved to util.go and returned from fileExists
+var ErrDoesNotExistOrIsADirectory = errors.New("file does not exist or is a directory.")
 
 // Prints help information.
 func showHelp() {
@@ -38,13 +41,13 @@ func addGamePrompt(reader *bufio.Reader) error {
 	fmt.Print("Enter game name: ")
 	gameName, err := reader.ReadString('\n')
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	fmt.Print("Enter path to executable: ")
 	pathToExecutable, err := reader.ReadString('\n')
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	gameName = strings.TrimSpace(gameName)
@@ -56,7 +59,7 @@ func addGamePrompt(reader *bufio.Reader) error {
 
 	b := fileExists(pathToExecutable)
 	if !b {
-		log.Fatalf("'%v' does not exist or is a directory.", pathToExecutable)
+		return ErrDoesNotExistOrIsADirectory
 	}
 
 	fmt.Printf("\n[DEBUG] name: %v; path: %v, exists: %v\n",
@@ -68,29 +71,35 @@ func addGamePrompt(reader *bufio.Reader) error {
 }
 
 // Shows the list of game entries in the config file and removes the user chosen option.
-func removeGamePrompt(reader *bufio.Reader) {
-	listGamesNumbered(programHome)
+func removeGamePrompt(reader *bufio.Reader) error {
+	err := listGamesNumbered(programHome)
+	if err != nil {
+		return err
+	}
+
 	fmt.Print("Enter number you want to delete: ")
 	userInput, err := reader.ReadString('\n')
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	userInput = strings.TrimSpace(userInput)
 	intVal, err := strconv.Atoi(userInput)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	removeGameFromConfig(intVal, programHome)
+
+	return nil
 }
 
 // Looks for a file named config.json in the parentDir path and prints
 // the index and the game name of the entries in the file.
-func listGamesNumbered(parentDir string) {
+func listGamesNumbered(parentDir string) error {
 	configFile := filepath.Join(parentDir, "config.json")
 	if !fileExists(configFile) {
-		log.Fatalf("'%v' does not exist or is a directory.", configFile)
+		return ErrDoesNotExistOrIsADirectory
 	}
 
 	// TODO: Extract this & move to config.go
@@ -98,7 +107,12 @@ func listGamesNumbered(parentDir string) {
 	games := []Game{}
 	err := json.Unmarshal(f, &games)
 	if err != nil {
-		log.Fatal(err)
+		return err
+	}
+
+	if len(games) == 0 {
+		fmt.Println("No games found")
+		return nil
 	}
 
 	var s string
@@ -107,4 +121,5 @@ func listGamesNumbered(parentDir string) {
 	}
 
 	fmt.Print(s)
+	return nil
 }

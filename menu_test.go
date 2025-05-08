@@ -3,115 +3,102 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-func TestAddGamePromptFileNotFound(t *testing.T) {
-	if os.Getenv("BE_CRASHER") == "1" {
-		input := "Test1234567890\nTest Game\n"
-		r := bufio.NewReader(strings.NewReader(input))
-		addGamePrompt(r)
-		return
+// Creates a dir and a file inside it with name + random numbers
+func setupAddGamePromptTest(t *testing.T, name string) *os.File {
+	d, err := os.MkdirTemp("", name)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	cmd := exec.Command(os.Args[0],
-		"-test.run=TestAddGamePromptFileNotFound")
-	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
-	err := cmd.Run()
-	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
-		return
+	f, err := os.CreateTemp(d, name)
+	if err != nil {
+		t.Fatal("creating temp file on dir with emojis:", err)
 	}
-	t.Fatalf("process ran with err %v; want exit status 1", err)
+	f.Close()
+
+	return f
 }
 
-func TestAddGamePromptGoodEnding(t *testing.T) {
-	f, err := createTempFileOnOsTempDir()
-	if err != nil {
-		t.Error(err)
-	}
+func TestAddGamePrompt(t *testing.T) {
+	deleteConfigFileFromTempDir(t)
 
-	input := "Test Game Name\n" + f.Name() + "\n"
-	r := bufio.NewReader(strings.NewReader(input))
+	f1, err := createTempFileOnOsTempDir()
+	if err != nil {
+		t.Fatal(err)
+	} // f1.Close already called
+
+	fileWithSpaces := setupAddGamePromptTest(t, "With Some Spaces")
+	fileWithEmojis := setupAddGamePromptTest(t, "😀😃😄😁🤣🥲🥹☺️")
+	fileWithCJK := setupAddGamePromptTest(t, "史诗 テスト 파일")
+
+	os.Setenv("TEST_TMPDIR", os.TempDir())
 
 	orig := programHome
 	programHome = os.TempDir()
-	addGamePrompt(r)
-	programHome = orig
-}
-
-func TestAddGamePromptPathWithSpaces(t *testing.T) {
-	testDir, err := os.MkdirTemp("", "Dir With Spaces")
-	if err != nil {
-		t.Error(err)
-	}
-
-	f, err := os.CreateTemp(testDir, "TESTFILE")
-	if err != nil {
-		t.Error(err)
-	}
-	defer f.Close()
-
-	input := "Test Game Name\n" + f.Name() + "\n"
-	r := bufio.NewReader(strings.NewReader(input))
-	orig := programHome
-	programHome = os.TempDir()
-	addGamePrompt(r)
-	programHome = orig
-}
-
-func TestAddGamePromptPathIsADirectory(t *testing.T) {
-	if os.Getenv("BE_CRASHER") == "1" {
-		testDir, err := os.MkdirTemp("", "TESTDIR")
-		if err != nil {
-			t.Error(err)
-		}
-
-		input := "Test Game Name\n" + testDir + "\n"
-		r := bufio.NewReader(strings.NewReader(input))
-		addGamePrompt(r)
-		return
-	}
-	cmd := exec.Command(os.Args[0],
-		"-test.run=TestAddGamePromptPathIsADirectory")
-	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
-	err := cmd.Run()
-	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
-		return
-	}
-	t.Fatalf("process ran with err %v; want exit status 1", err)
-}
-
-func TestAddGamePromptExpandsEnvVariables(t *testing.T) {
-	if os.Getenv("TEST_TMPDIR") != "" {
-		f, err := createTempFileOnOsTempDir()
-		if err != nil {
-			t.Error("error creating temp file:", err)
-		}
-
-		fileName := filepath.Base(f.Name())
-
-		input := "Test Game Name\n" +
-			"$TEST_TMPDIR/" + fileName + "\n"
-		r := bufio.NewReader(strings.NewReader(input))
-		orig := programHome
-		programHome = os.TempDir()
-		addGamePrompt(r)
+	defer func() {
 		programHome = orig
-		return
+	}()
+
+	tests := map[string]struct {
+		input  string
+		result error
+	}{
+		"empty string": {
+			input:  "\n\n",
+			result: ErrDoesNotExistOrIsADirectory},
+		"file not found": {
+			input:  "test\nSomeNonExistentFileHere\n",
+			result: ErrDoesNotExistOrIsADirectory},
+		"good ending": {
+			input:  fmt.Sprintf("test\n%s\n", f1.Name()),
+			result: nil},
+		"path with spaces": {
+			input:  fmt.Sprintf("test\n%s\n", fileWithSpaces.Name()),
+			result: nil},
+		"path is a directory": {
+			input:  fmt.Sprintf("test\n%s\n", os.TempDir()),
+			result: ErrDoesNotExistOrIsADirectory},
+		"path has emojis": {
+			input:  fmt.Sprintf("test\n%s\n", fileWithEmojis.Name()),
+			result: nil},
+		"cjk path": {
+			input:  fmt.Sprintf("test\n%s\n", fileWithCJK.Name()),
+			result: nil},
+		"path has env variables": {
+			input: fmt.Sprintf("test\n$TEST_TMPDIR/%s\n",
+				filepath.Base(f1.Name())),
+			result: nil},
 	}
 
-	cmd := exec.Command(os.Args[0],
-		"-test.run=TestAddGamePromptExpandsEnvVariables")
-	cmd.Env = append(os.Environ(), "TEST_TMPDIR="+os.TempDir())
-	err := cmd.Run()
-	if err != nil {
-		t.Fatalf("process ran with err %v; want exit status 0", err)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			r := bufio.NewReader(strings.NewReader(test.input))
+
+			sout := os.Stdout
+			serr := os.Stderr
+			os.Stdout = nil
+			os.Stderr = nil
+
+			got := addGamePrompt(r)
+			want := test.result
+
+			os.Stdout = sout
+			os.Stderr = serr
+
+			if !errors.Is(got, want) {
+				t.Fatalf("got %v; want %v;", got, want)
+			}
+		})
 	}
 }
 
@@ -135,44 +122,107 @@ func TestExistsFalse(t *testing.T) {
 }
 
 func TestListGamesNumbered(t *testing.T) {
-	f, testDir := setupTest(t)
+	deleteConfigFileFromTempDir(t)
+	createEmptyConfigFileAt(os.TempDir())
 
-	err := deleteFile(filepath.Join(testDir, "config.json"))
+	emptyDir, err := os.MkdirTemp("", "emptydir")
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
-	createEmptyConfigFileAt(testDir)
-
-	for range 3 {
-		saveGameToConfig("Test Game", f.Name(), testDir)
-	}
-
-	games := []Game{}
-	err = json.Unmarshal(loadConfigFile(testDir), &games)
+	badJsonDir, err := os.MkdirTemp("", "badJson")
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
+	}
+	f := filepath.Join(badJsonDir, "config.json")
+	err = os.WriteFile(f, []byte("TEST1"), os.ModePerm)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	var want string
-	for i, game := range games {
-		want = want + fmt.Sprintf("[%v] %v\n", i, game.Name)
+	emptyConfigDir, err := os.MkdirTemp("", "holdingEmptyConfigFile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	createEmptyConfigFileAt(emptyConfigDir)
+
+	// Reusing created file for game executable
+	saveGameToConfig("Test Game", f, os.TempDir())
+
+	errTests := map[string]struct {
+		input  string
+		result error
+	}{
+		"config file not found": {
+			input:  emptyDir,
+			result: ErrDoesNotExistOrIsADirectory},
+		"bad json": {
+			input:  badJsonDir,
+			result: &json.SyntaxError{Offset: 0},
+		},
 	}
 
-	got := captureOutput(func() {
-		listGamesNumbered(testDir)
-	})
+	outTests := map[string]struct {
+		input  string
+		result string
+	}{
+		"good ending": {
+			input:  os.TempDir(),
+			result: fmt.Sprintf("[0] Test Game\n"),
+		},
+		"empty config": {
+			input:  emptyConfigDir,
+			result: "No games found\n",
+		},
+	}
 
-	if got != want {
-		t.Errorf("wanted: %v; got: %v", want, got)
+	for name, test := range errTests {
+		t.Run(name, func(t *testing.T) {
+			sout := os.Stdout
+			serr := os.Stderr
+			os.Stdout = nil
+			os.Stderr = nil
+
+			got := listGamesNumbered(test.input)
+			want := test.result
+
+			os.Stdout = sout
+			os.Stderr = serr
+
+			// HACK: Only checks the message, but not the type
+			if name == "bad json" {
+				msg := "invalid character 'T' looking for beginning of value"
+				if !strings.Contains(got.Error(), msg) {
+					t.Fatalf("got %v; want %v;", got, want)
+				}
+			} else {
+				if !errors.Is(got, want) {
+					t.Fatalf("got %v; want %v;", got, want)
+				}
+			}
+
+		})
+	}
+
+	for name, test := range outTests {
+		t.Run(name, func(t *testing.T) {
+			got := captureOutput(test.input, listGamesNumbered)
+			want := test.result
+
+			if got != want {
+				t.Fatalf("got %s; want %s;", got, want)
+			}
+
+		})
 	}
 }
 
-func captureOutput(f func()) string {
+// Only for listGamesNumbered
+func captureOutput(input string, f func(s string) error) string {
 	orig := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	f()
+	f(input)
 	os.Stdout = orig
 	w.Close()
 	out, _ := io.ReadAll(r)
@@ -180,27 +230,73 @@ func captureOutput(f func()) string {
 }
 
 func TestRemoveGamePrompt(t *testing.T) {
-	f, testDir := setupTest(t)
-
-	err := deleteFile(filepath.Join(testDir, "config.json"))
-	if err != nil {
-		t.Error(err)
+	deleteConfigFileFromTempDir(t)
+	f, d := setupTest(t)
+	for range 10 {
+		saveGameToConfig("Test", f.Name(), d)
 	}
 
-	saveGameToConfig("Test Game", f.Name(), testDir)
-	input := "0\n"
-	r := bufio.NewReader(strings.NewReader(input))
 	orig := programHome
-	programHome = testDir
+	programHome = os.TempDir()
+	defer func() {
+		programHome = orig
+	}()
 
-	removeGamePrompt(r)
-	programHome = orig
+	tests := map[string]struct {
+		input  string
+		result error
+	}{
+		"empty string": {
+			input:  "\n",
+			result: strconv.ErrSyntax},
+		"good ending": {
+			input:  "0\n",
+			result: nil},
+		"input with spaces": {
+			input:  "1 2 3 4 5 6 7\n",
+			result: strconv.ErrSyntax},
+		"input has no numbers": {
+			input:  "no numbers here\n",
+			result: strconv.ErrSyntax},
+		"emoji input": {
+			input:  "☺️\n",
+			result: strconv.ErrSyntax},
+		"cjk input": {
+			input:  "史诗 テスト 파일\n",
+			result: strconv.ErrSyntax},
+		// TODO: should be ErrInvalidOption from config.go
+		// "less than zero": {
+		// 	input:  "-1\n",
+		// 	result: nil},
+		"notation": {
+			input:  "1e9\n",
+			result: strconv.ErrSyntax},
+		"negative notation": {
+			input:  "-1e9\n",
+			result: strconv.ErrSyntax},
+		"tab character": {
+			input:  "2\t\n",
+			result: nil},
+	}
 
-	games := []Game{}
-	json.Unmarshal(loadConfigFile(testDir), &games)
-	got := len(games)
-	want := 0
-	if got != want {
-		t.Errorf("want length=%v, got length=%v", want, got)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			r := bufio.NewReader(strings.NewReader(test.input))
+
+			sout := os.Stdout
+			serr := os.Stderr
+			os.Stdout = nil
+			os.Stderr = nil
+
+			got := removeGamePrompt(r)
+			want := test.result
+
+			os.Stdout = sout
+			os.Stderr = serr
+
+			if !errors.Is(got, want) {
+				t.Fatalf("got %v; want %v;", got, want)
+			}
+		})
 	}
 }

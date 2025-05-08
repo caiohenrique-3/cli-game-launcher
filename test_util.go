@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -15,6 +16,16 @@ func createTempFileOnOsTempDir() (*os.File, error) {
 	return f, nil // calling .name() on this is safe after close
 }
 
+func deleteConfigFileFromTempDir(t *testing.T) {
+	f := filepath.Join(os.TempDir(), "config.json")
+	if fileExists(f) {
+		err := os.Remove(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // Returns a temporary file and its parent dir.
 func setupTest(t *testing.T) (*os.File, string) {
 	f, err := createTempFileOnOsTempDir()
@@ -24,8 +35,6 @@ func setupTest(t *testing.T) (*os.File, string) {
 	defer f.Close()
 
 	testDir := os.TempDir()
-
-	// TODO: Clean config.json from tmp dir before tests
 
 	return f, testDir
 }
