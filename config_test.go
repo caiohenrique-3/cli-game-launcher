@@ -9,6 +9,76 @@ import (
 	"testing"
 )
 
+func TestCreateEmptyConfigFileAt(t *testing.T) {
+	deleteConfigFileFromTempDir(t)
+
+	f, err := createTempFileOnOsTempDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := os.MkdirTemp(os.TempDir(), "good-ending")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.WriteFile(filepath.Join(d, "config.json"), nil, os.ModePerm)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c := filepath.Join(os.TempDir(), "config.json")
+	err = os.WriteFile(c, nil, os.ModePerm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Chmod(c, 0400)
+
+	tests := map[string]struct {
+		input  string
+		errMsg string
+	}{
+		"path is not a dir": {
+			input:  f.Name(),
+			errMsg: "not a directory"},
+		"path not found": {
+			input:  "/test/path/404",
+			errMsg: "no such file or directory"},
+		"config.json is read-only": {
+			input:  os.TempDir(),
+			errMsg: "permission denied"},
+		"good ending": {
+			input:  d,
+			errMsg: ""},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := createEmptyConfigFileAt(test.input)
+			want := test.errMsg
+
+			if !ErrorContains(got, want) {
+				t.Errorf("got '%v'; want '%s';\n", got, want)
+			}
+
+			if name == "good ending" {
+				f := loadConfigFile(d)
+
+				dat := []Game{}
+				err = json.Unmarshal(f, &dat)
+				if err != nil {
+					t.Error(err)
+				}
+
+				gotLen := len(dat)
+				wantLen := 0
+				if len(dat) != 0 {
+					t.Errorf("got '%v'; want '%v';\n", gotLen, wantLen)
+				}
+			}
+		})
+	}
+}
+
 func TestAppendNewGameToConfigFileAppendsCorrectly(t *testing.T) {
 	testTempFile, testDir := setupTest(t)
 	configFile := filepath.Join(testDir, "config.json")
@@ -18,7 +88,10 @@ func TestAppendNewGameToConfigFileAppendsCorrectly(t *testing.T) {
 		t.Error(err)
 	}
 
-	createEmptyConfigFileAt(testDir)
+	err = createEmptyConfigFileAt(testDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	gameName := "Test Game"
 	gamePath := testTempFile.Name()
@@ -70,7 +143,10 @@ func TestAppendNewGameToConfigFileBadJson(t *testing.T) {
 			t.Error(err)
 		}
 
-		createEmptyConfigFileAt(testDir)
+		err = createEmptyConfigFileAt(testDir)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		testInput := "TESTTESTTEST1234567890"
 
@@ -116,27 +192,6 @@ func TestSaveGameToConfigCreatesConfigFileIfMissing(t *testing.T) {
 
 	if !fileExists(configFile) {
 		t.Error("config.json was not created!")
-	}
-}
-
-func TestCreateEmptyConfigFile(t *testing.T) {
-	configFile := filepath.Join(os.TempDir(), "config.json")
-	err := deleteFile(configFile)
-	if err != nil {
-		t.Error(err)
-	}
-
-	createEmptyConfigFileAt(os.TempDir())
-	f := loadConfigFile(os.TempDir())
-
-	dat := []Game{}
-	err = json.Unmarshal(f, &dat)
-	if err != nil {
-		t.Error(err)
-	}
-
-	if len(dat) != 0 {
-		t.Error("config.json unmarshaled data is not empty!")
 	}
 }
 
@@ -186,7 +241,10 @@ func TestRemoveGameFromConfigEmptyGames(t *testing.T) {
 			t.Error(err)
 		}
 
-		createEmptyConfigFileAt(os.TempDir())
+		err = createEmptyConfigFileAt(os.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
 		removeGameFromConfig(0, os.TempDir())
 	}
 

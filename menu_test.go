@@ -123,7 +123,10 @@ func TestExistsFalse(t *testing.T) {
 
 func TestListGamesNumbered(t *testing.T) {
 	deleteConfigFileFromTempDir(t)
-	createEmptyConfigFileAt(os.TempDir())
+	err := createEmptyConfigFileAt(os.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	emptyDir, err := os.MkdirTemp("", "emptydir")
 	if err != nil {
@@ -144,7 +147,11 @@ func TestListGamesNumbered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createEmptyConfigFileAt(emptyConfigDir)
+
+	err = createEmptyConfigFileAt(emptyConfigDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Reusing created file for game executable
 	saveGameToConfig("Test Game", f, os.TempDir())
@@ -156,7 +163,7 @@ func TestListGamesNumbered(t *testing.T) {
 		"config file not found": {
 			input:  emptyDir,
 			result: ErrDoesNotExistOrIsADirectory},
-		"bad json": {
+		"bad json": { // TODO: Use ErrorContains function here
 			input:  badJsonDir,
 			result: &json.SyntaxError{Offset: 0},
 		},
@@ -193,11 +200,11 @@ func TestListGamesNumbered(t *testing.T) {
 			if name == "bad json" {
 				msg := "invalid character 'T' looking for beginning of value"
 				if !strings.Contains(got.Error(), msg) {
-					t.Fatalf("got %v; want %v;", got, want)
+					t.Errorf("got '%v'; want '%v';\n", got, want)
 				}
 			} else {
 				if !errors.Is(got, want) {
-					t.Fatalf("got %v; want %v;", got, want)
+					t.Errorf("got '%v'; want '%v';\n", got, want)
 				}
 			}
 
@@ -210,7 +217,7 @@ func TestListGamesNumbered(t *testing.T) {
 			want := test.result
 
 			if got != want {
-				t.Fatalf("got %s; want %s;", got, want)
+				t.Errorf("got '%v'; want '%v';\n", got, want)
 			}
 
 		})

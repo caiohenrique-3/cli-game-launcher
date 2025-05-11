@@ -13,20 +13,21 @@ type Game struct {
 }
 
 // Creates config.json file in the path specified by dir param.
-func createEmptyConfigFileAt(dir string) {
+func createEmptyConfigFileAt(dir string) error {
 	configFile := filepath.Join(dir, "config.json")
 
 	arr := [...]Game{}
 	jsonData, err := json.MarshalIndent(arr, "", "    ")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	err = os.WriteFile(configFile, jsonData, os.ModePerm)
 	if err != nil {
-		log.Fatal(err)
-		return
+		return err
 	}
+
+	return nil
 }
 
 // Loads config.json and appends a new Game entry to the file.
@@ -37,7 +38,10 @@ func saveGameToConfig(gameName string, pathToExecutable string,
 	configFile := filepath.Join(configFileParentDir, "config.json")
 
 	if !fileExists(configFile) {
-		createEmptyConfigFileAt(configFileParentDir)
+		err := createEmptyConfigFileAt(configFileParentDir)
+		if err != nil {
+			// return err
+		}
 	}
 
 	f := loadConfigFile(configFileParentDir)
