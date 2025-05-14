@@ -57,24 +57,26 @@ func saveGameToConfig(gameName string, pathToExecutable string,
 // Unmarshals fileData, appends a new game to it and saves the
 // new file in pathToConfigFile.
 func appendNewGameToConfigFile(fileData []byte, game *Game,
-	pathToConfigFile string) {
+	pathToConfigFile string) error {
 	dat := []Game{}
 	err := json.Unmarshal(fileData, &dat)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	dat = append(dat, *game)
 
 	b, err := json.MarshalIndent(dat, "", "    ")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	err = os.WriteFile(pathToConfigFile, b, os.ModePerm)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	return nil
 }
 
 // Removes the selected entry from config.json file.

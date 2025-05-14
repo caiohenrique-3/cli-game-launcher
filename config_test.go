@@ -9,6 +9,138 @@ import (
 	"testing"
 )
 
+func TestAppendNewGameToConfigFileErrors(t *testing.T) {
+	// test if it appended correctly
+	deleteConfigFileFromTempDir(t)
+	createEmptyConfigFileAt(os.TempDir())
+
+	badFileData := []byte("ABC\tTEST\n99")
+
+	testDir, err := os.MkdirTemp("", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testFile, err := createTempFileOnOsTempDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testGame := &Game{
+		Name:             "Test Game",
+		PathToExecutable: testFile.Name()}
+
+	testConfigFilePath := filepath.Join(os.TempDir(),
+		"config.json")
+
+	testFileData, err := os.ReadFile(testConfigFilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	readOnlyPath, err := os.CreateTemp(testDir, "read-only")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Chmod(readOnlyPath.Name(), 0400)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readOnlyPath.Close()
+
+	tests := map[string]struct {
+		fileData         []byte
+		game             *Game
+		pathToConfigFile string
+		errMsg           string
+	}{
+		"fileData is bad": {
+			fileData:         badFileData,
+			game:             testGame,
+			pathToConfigFile: testConfigFilePath,
+			errMsg:           "invalid character"},
+		"empty Game": {
+			fileData:         testFileData,
+			game:             &Game{},
+			pathToConfigFile: testConfigFilePath,
+			errMsg:           ""},
+		"path not found": {
+			fileData:         testFileData,
+			game:             testGame,
+			pathToConfigFile: "/test/404/path",
+			errMsg:           "no such file or directory"},
+		"path is read-only": {
+			fileData:         testFileData,
+			game:             testGame,
+			pathToConfigFile: readOnlyPath.Name(),
+			errMsg:           "permission denied"},
+		"path is a dir": {
+			fileData:         testFileData,
+			game:             testGame,
+			pathToConfigFile: testDir,
+			errMsg:           "is a directory"},
+		"good ending": {
+			fileData:         testFileData,
+			game:             testGame,
+			pathToConfigFile: testConfigFilePath,
+			errMsg:           ""},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := appendNewGameToConfigFile(
+				test.fileData, test.game, test.pathToConfigFile)
+			want := test.errMsg
+			if !ErrorContains(got, want) {
+				t.Errorf("got '%v'; want '%v';\n", got, want)
+			}
+		})
+	}
+
+}
+
+func TestAppendNewGameToConfigFile(t *testing.T) {
+	deleteConfigFileFromTempDir(t)
+	createEmptyConfigFileAt(os.TempDir())
+	testConfigFilePath := filepath.Join(os.TempDir(), "config.json")
+
+	testTempFile, err := createTempFileOnOsTempDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := 10
+	for i := range want {
+		testGame := &Game{
+			Name:             fmt.Sprintf("Test Game %v", i),
+			PathToExecutable: testTempFile.Name()}
+
+		configFileData, err := os.ReadFile(testConfigFilePath)
+		if err != nil {
+			t.Fatalf("error reading file: %v\n", err)
+		}
+
+		appendNewGameToConfigFile(configFileData, testGame, testConfigFilePath)
+	}
+
+	configFileData, err := os.ReadFile(testConfigFilePath)
+	if err != nil {
+		t.Fatalf("error reading file: %v\n", err)
+	}
+
+	games := []Game{}
+	err = json.Unmarshal(configFileData, &games)
+	if err != nil {
+		t.Fatalf("error on unmarshal: %v\n", err)
+
+	}
+
+	got := len(games)
+	if got != want {
+		t.Errorf("got length='%v'; want length='%v';\n", got, want)
+	}
+}
+
 func TestCreateEmptyConfigFileAt(t *testing.T) {
 	deleteConfigFileFromTempDir(t)
 
@@ -31,7 +163,10 @@ func TestCreateEmptyConfigFileAt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Chmod(c, 0400)
+	err = os.Chmod(c, 0400)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	tests := map[string]struct {
 		input  string
@@ -77,106 +212,6 @@ func TestCreateEmptyConfigFileAt(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestAppendNewGameToConfigFileAppendsCorrectly(t *testing.T) {
-	testTempFile, testDir := setupTest(t)
-	configFile := filepath.Join(testDir, "config.json")
-
-	err := deleteFile(configFile)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = createEmptyConfigFileAt(testDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	gameName := "Test Game"
-	gamePath := testTempFile.Name()
-	game := &Game{
-		Name:             gameName,
-		PathToExecutable: gamePath,
-	}
-
-	var f []byte
-	for range 3 {
-		f = loadConfigFile(testDir)
-		appendNewGameToConfigFile(f, game, configFile)
-	}
-
-	f = loadConfigFile(testDir)
-
-	data := []Game{}
-	err = json.Unmarshal(f, &data)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(data) != 3 {
-		t.Errorf("unmarshaled data has len %v, want %v",
-			len(data), 2)
-	}
-
-	for i, v := range data {
-		if v.Name != gameName {
-			t.Errorf("key %v: want %v; got %v",
-				i, gameName, v.Name)
-		}
-
-		if v.PathToExecutable != gamePath {
-			t.Errorf("key %v: want %v; got %v",
-				i, gamePath, v.PathToExecutable)
-		}
-	}
-
-}
-
-func TestAppendNewGameToConfigFileBadJson(t *testing.T) {
-	if os.Getenv("BE_CRASHER") == "1" {
-		testTempFile, testDir := setupTest(t)
-		configFile := filepath.
-			Join(testDir, "config.json")
-
-		err := deleteFile(configFile)
-		if err != nil {
-			t.Error(err)
-		}
-
-		err = createEmptyConfigFileAt(testDir)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		testInput := "TESTTESTTEST1234567890"
-
-		err = os.WriteFile(configFile,
-			[]byte(testInput), os.ModePerm)
-		if err != nil {
-			t.Error("writing bad input on file:", err)
-			return
-		}
-
-		gameName := "Test Game"
-		gamePath := testTempFile.Name()
-		game := &Game{
-			Name:             gameName,
-			PathToExecutable: gamePath,
-		}
-
-		f := loadConfigFile(testDir)
-		appendNewGameToConfigFile(f, game, configFile)
-	}
-
-	cmd := exec.Command(os.Args[0],
-		"-test.run=TestAppendNewGameToConfigFileBadJson")
-	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
-	err := cmd.Run()
-	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
-		return
-	}
-
-	t.Fatalf("process ran with err %v; want exit status 1", err)
 }
 
 func TestSaveGameToConfigCreatesConfigFileIfMissing(t *testing.T) {

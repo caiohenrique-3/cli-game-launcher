@@ -163,7 +163,7 @@ func TestListGamesNumbered(t *testing.T) {
 		"config file not found": {
 			input:  emptyDir,
 			result: ErrDoesNotExistOrIsADirectory},
-		"bad json": { // TODO: Use ErrorContains function here
+		"bad json": {
 			input:  badJsonDir,
 			result: &json.SyntaxError{Offset: 0},
 		},
