@@ -12,7 +12,10 @@ import (
 func TestAppendNewGameToConfigFileErrors(t *testing.T) {
 	// test if it appended correctly
 	deleteConfigFileFromTempDir(t)
-	createEmptyConfigFileAt(os.TempDir())
+	err := createEmptyConfigFileAt(os.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	badFileData := []byte("ABC\tTEST\n99")
 
@@ -101,7 +104,11 @@ func TestAppendNewGameToConfigFileErrors(t *testing.T) {
 
 func TestAppendNewGameToConfigFile(t *testing.T) {
 	deleteConfigFileFromTempDir(t)
-	createEmptyConfigFileAt(os.TempDir())
+	err := createEmptyConfigFileAt(os.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	testConfigFilePath := filepath.Join(os.TempDir(), "config.json")
 
 	testTempFile, err := createTempFileOnOsTempDir()
