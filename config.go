@@ -34,7 +34,7 @@ func createEmptyConfigFileAt(dir string) error {
 // Accepts the game display name, the absolute path to the
 // game executable file and the path where config.json will be saved.
 func saveGameToConfig(gameName string, pathToExecutable string,
-	configFileParentDir string) {
+	configFileParentDir string) error {
 	configFile := filepath.Join(configFileParentDir, "config.json")
 
 	if !fileExists(configFile) {
@@ -44,14 +44,22 @@ func saveGameToConfig(gameName string, pathToExecutable string,
 		}
 	}
 
-	f := loadConfigFile(configFileParentDir)
+	f, err := loadConfigFile(configFileParentDir)
+	if err != nil {
+		return err
+	}
 
 	game := &Game{
 		Name:             gameName,
 		PathToExecutable: pathToExecutable,
 	}
 
-	appendNewGameToConfigFile(f, game, configFile)
+	err = appendNewGameToConfigFile(f, game, configFile)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Unmarshals fileData, appends a new game to it and saves the
@@ -80,10 +88,15 @@ func appendNewGameToConfigFile(fileData []byte, game *Game,
 }
 
 // Removes the selected entry from config.json file.
-func removeGameFromConfig(index int, configFileParentDir string) {
+func removeGameFromConfig(index int, configFileParentDir string) error {
 	configFile := filepath.Join(configFileParentDir, "config.json")
 	games := []Game{}
-	json.Unmarshal(loadConfigFile(configFileParentDir), &games)
+	data, err := loadConfigFile(configFileParentDir)
+	if err != nil {
+		return err
+	}
+
+	json.Unmarshal(data, &games)
 
 	if len(games) == 0 {
 		log.Fatal("No games found!")
@@ -109,13 +122,15 @@ func removeGameFromConfig(index int, configFileParentDir string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	return nil
 }
 
-func loadConfigFile(configFileParentDir string) []byte {
+func loadConfigFile(configFileParentDir string) ([]byte, error) {
 	configFile := filepath.Join(configFileParentDir, "config.json")
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	return data
+	return data, nil
 }

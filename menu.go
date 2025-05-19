@@ -103,9 +103,13 @@ func listGamesNumbered(parentDir string) error {
 	}
 
 	// TODO: Extract this & move to config.go
-	f := loadConfigFile(parentDir)
+	f, err := loadConfigFile(parentDir)
+	if err != nil {
+		return err
+	}
+
 	games := []Game{}
-	err := json.Unmarshal(f, &games)
+	err = json.Unmarshal(f, &games)
 	if err != nil {
 		return err
 	}

@@ -196,7 +196,10 @@ func TestCreateEmptyConfigFileAt(t *testing.T) {
 			}
 
 			if name == "good ending" {
-				f := loadConfigFile(d)
+				f, err := loadConfigFile(d)
+				if err != nil {
+					t.Error(err)
+				}
 
 				dat := []Game{}
 				err = json.Unmarshal(f, &dat)
@@ -250,7 +253,12 @@ func TestRemoveGameFromConfig(t *testing.T) {
 	removeGameFromConfig(0, testDir)
 
 	games := []Game{}
-	err = json.Unmarshal(loadConfigFile(testDir), &games)
+	data, err := loadConfigFile(testDir)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = json.Unmarshal(data, &games)
 	if err != nil {
 		t.Error(err)
 	}
