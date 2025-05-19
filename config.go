@@ -31,8 +31,7 @@ func createEmptyConfigFileAt(dir string) error {
 }
 
 // Loads config.json and appends a new Game entry to the file.
-// Accepts the game display name, the absolute path to the
-// game executable file and the path where config.json will be saved.
+// Creates a config.json file if it doesn't already exist.
 func saveGameToConfig(gameName string, pathToExecutable string,
 	configFileParentDir string) error {
 	configFile := filepath.Join(configFileParentDir, "config.json")
@@ -40,7 +39,7 @@ func saveGameToConfig(gameName string, pathToExecutable string,
 	if !fileExists(configFile) {
 		err := createEmptyConfigFileAt(configFileParentDir)
 		if err != nil {
-			// return err
+			return err
 		}
 	}
 

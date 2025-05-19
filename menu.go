@@ -65,7 +65,10 @@ func addGamePrompt(reader *bufio.Reader) error {
 	fmt.Printf("\n[DEBUG] name: %v; path: %v, exists: %v\n",
 		gameName, pathToExecutable, b)
 
-	saveGameToConfig(gameName, pathToExecutable, programHome)
+	err = saveGameToConfig(gameName, pathToExecutable, programHome)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

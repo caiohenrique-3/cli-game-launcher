@@ -233,7 +233,10 @@ func TestSaveGameToConfigCreatesConfigFileIfMissing(t *testing.T) {
 		t.Error(err)
 	}
 
-	saveGameToConfig("Test Game", f.Name(), testDir)
+	err = saveGameToConfig("Test Game", f.Name(), testDir)
+	if err != nil {
+		t.Error(err)
+	}
 
 	if !fileExists(configFile) {
 		t.Error("config.json was not created!")
@@ -249,10 +252,13 @@ func TestRemoveGameFromConfig(t *testing.T) {
 	}
 
 	for i := range 10 {
-		saveGameToConfig(
+		err := saveGameToConfig(
 			fmt.Sprintf("Test Game %v", i),
 			f.Name(),
 			testDir)
+		if err != nil {
+			t.Error(err)
+		}
 	}
 
 	removeGameFromConfig(0, testDir)
@@ -319,7 +325,10 @@ func TestRemoveGameFromConfigInvalidOption(t *testing.T) {
 			t.Error(err)
 		}
 
-		saveGameToConfig("Test Game", f.Name(), testDir)
+		err = saveGameToConfig("Test Game", f.Name(), testDir)
+		if err != nil {
+			t.Error(err)
+		}
 		removeGameFromConfig(2, testDir)
 	}
 

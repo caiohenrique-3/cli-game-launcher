@@ -154,7 +154,10 @@ func TestListGamesNumbered(t *testing.T) {
 	}
 
 	// Reusing created file for game executable
-	saveGameToConfig("Test Game", f, os.TempDir())
+	err = saveGameToConfig("Test Game", f, os.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	errTests := map[string]struct {
 		input  string
@@ -240,7 +243,10 @@ func TestRemoveGamePrompt(t *testing.T) {
 	deleteConfigFileFromTempDir(t)
 	f, d := setupTest(t)
 	for range 10 {
-		saveGameToConfig("Test", f.Name(), d)
+		err := saveGameToConfig("Test", f.Name(), d)
+		if err != nil {
+			t.Error(err)
+		}
 	}
 
 	orig := programHome
