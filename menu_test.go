@@ -98,25 +98,6 @@ func TestAddGamePrompt(t *testing.T) {
 	}
 }
 
-func TestFileExistsTrue(t *testing.T) {
-	f, err := createTempFileOnOsTempDir()
-	if err != nil {
-		t.Error(err)
-	}
-
-	b := fileExists(f.Name())
-	if !b {
-		t.Errorf("error: %v; want true", b)
-	}
-}
-
-func TestExistsFalse(t *testing.T) {
-	b := fileExists("/mint/dragon/path/three")
-	if b {
-		t.Errorf("error: %v; want false", b)
-	}
-}
-
 func TestListGamesNumbered(t *testing.T) {
 	deleteConfigFileFromTempDir(t)
 	err := createEmptyConfigFileAt(os.TempDir())

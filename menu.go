@@ -10,7 +10,6 @@ import (
 	"strings"
 )
 
-// TODO: will be moved to util.go and returned from fileExists
 var ErrDoesNotExistOrIsADirectory = errors.New("file does not exist or is a directory.")
 
 // Prints help information.
