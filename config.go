@@ -2,7 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"log"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -11,6 +12,9 @@ type Game struct {
 	Name             string `json:"name"`
 	PathToExecutable string `json:"pathToExecutable"`
 }
+
+var ErrInvalidOption = errors.New("invalid option")
+var ErrNoGamesFound = errors.New("no games found")
 
 // Creates config.json file in the path specified by dir param.
 func createEmptyConfigFileAt(dir string) error {
@@ -92,17 +96,20 @@ func removeGameFromConfig(index int, configFileParentDir string) error {
 	games := []Game{}
 	data, err := loadConfigFile(configFileParentDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("load config file failed: %w", err)
 	}
 
-	json.Unmarshal(data, &games)
+	err = json.Unmarshal(data, &games)
+	if err != nil {
+		return fmt.Errorf("unmarshal failed: %w", err)
+	}
 
 	if len(games) == 0 {
-		log.Fatal("No games found!")
+		return ErrNoGamesFound
 	}
 
 	if index > len(games)-1 || index < 0 {
-		log.Fatal("Invalid option!")
+		return ErrInvalidOption
 	}
 
 	newGames := []Game{}
@@ -114,12 +121,12 @@ func removeGameFromConfig(index int, configFileParentDir string) error {
 
 	jsonData, err := json.MarshalIndent(newGames, "", "    ")
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("marshal after removal failed: %w", err)
 	}
 
 	err = os.WriteFile(configFile, jsonData, os.ModePerm)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("save config file after removal failed: %w", err)
 	}
 
 	return nil

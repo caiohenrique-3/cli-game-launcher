@@ -92,7 +92,10 @@ func removeGamePrompt(reader *bufio.Reader) error {
 		return err
 	}
 
-	removeGameFromConfig(intVal, programHome)
+	err = removeGameFromConfig(intVal, programHome)
+	if err != nil {
+		return fmt.Errorf("remove game failed: %w", err)
+	}
 
 	return nil
 }

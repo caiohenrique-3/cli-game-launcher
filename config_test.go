@@ -2,9 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -246,10 +246,7 @@ func TestSaveGameToConfigCreatesConfigFileIfMissing(t *testing.T) {
 func TestRemoveGameFromConfig(t *testing.T) {
 	f, testDir := setupTest(t)
 
-	err := deleteFile(filepath.Join(testDir, "config.json"))
-	if err != nil {
-		t.Error(err)
-	}
+	deleteConfigFileFromTempDir(t) //testDir is tempdir
 
 	for i := range 10 {
 		err := saveGameToConfig(
@@ -261,9 +258,18 @@ func TestRemoveGameFromConfig(t *testing.T) {
 		}
 	}
 
-	removeGameFromConfig(0, testDir)
-	removeGameFromConfig(0, testDir)
-	removeGameFromConfig(0, testDir)
+	err := removeGameFromConfig(0, testDir)
+	if err != nil {
+		t.Error(err)
+	}
+	err = removeGameFromConfig(0, testDir)
+	if err != nil {
+		t.Error(err)
+	}
+	err = removeGameFromConfig(0, testDir)
+	if err != nil {
+		t.Error(err)
+	}
 
 	games := []Game{}
 	data, err := loadConfigFile(testDir)
@@ -289,56 +295,29 @@ func TestRemoveGameFromConfig(t *testing.T) {
 	}
 }
 
-func TestRemoveGameFromConfigEmptyGames(t *testing.T) {
-	if os.Getenv("BE_CRASHER") == "1" {
-		err := deleteFile(filepath.
-			Join(os.TempDir(), "config.json"))
-		if err != nil {
-			t.Error(err)
-		}
-
-		err = createEmptyConfigFileAt(os.TempDir())
-		if err != nil {
-			t.Fatal(err)
-		}
-		removeGameFromConfig(0, os.TempDir())
+func TestRemoveGameFromConfigNoGamesFound(t *testing.T) {
+	deleteConfigFileFromTempDir(t)
+	err := createEmptyConfigFileAt(os.TempDir())
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	cmd := exec.Command(os.Args[0],
-		"-test.run=TestRemoveGameFromConfigEmptyGames")
-	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
-	err := cmd.Run()
-	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
-		return
+	err = removeGameFromConfig(0, os.TempDir())
+	if !errors.Is(err, ErrNoGamesFound) {
+		t.Errorf("want %v; got %v;\n", ErrNoGamesFound, err)
 	}
-
-	t.Fatalf("process ran with err %v; want exit status 1", err)
 }
 
 func TestRemoveGameFromConfigInvalidOption(t *testing.T) {
-	if os.Getenv("BE_CRASHER") == "1" {
-		f, testDir := setupTest(t)
+	f, testDir := setupTest(t)
+	deleteConfigFileFromTempDir(t)
 
-		err := deleteFile(filepath.
-			Join(os.TempDir(), "config.json"))
-		if err != nil {
-			t.Error(err)
-		}
-
-		err = saveGameToConfig("Test Game", f.Name(), testDir)
-		if err != nil {
-			t.Error(err)
-		}
-		removeGameFromConfig(2, testDir)
+	err := saveGameToConfig("Test Game", f.Name(), testDir)
+	if err != nil {
+		t.Errorf("save game to config failed: %v", err)
 	}
 
-	cmd := exec.Command(os.Args[0],
-		"-test.run=TestRemoveGameFromConfigInvalidOption")
-	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
-	err := cmd.Run()
-	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
-		return
+	err = removeGameFromConfig(2, testDir)
+	if !errors.Is(err, ErrInvalidOption) {
+		t.Errorf("want %v; got %v;\n", ErrInvalidOption, err)
 	}
-
-	t.Fatalf("process ran with err %v; want exit status 1", err)
 }
