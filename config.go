@@ -2,7 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"log"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -12,79 +13,103 @@ type Game struct {
 	PathToExecutable string `json:"pathToExecutable"`
 }
 
+var ErrInvalidOption = errors.New("invalid option")
+var ErrNoGamesFound = errors.New("no games found")
+
 // Creates config.json file in the path specified by dir param.
-func createEmptyConfigFileAt(dir string) {
+func createEmptyConfigFileAt(dir string) error {
 	configFile := filepath.Join(dir, "config.json")
 
 	arr := [...]Game{}
 	jsonData, err := json.MarshalIndent(arr, "", "    ")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	err = os.WriteFile(configFile, jsonData, os.ModePerm)
 	if err != nil {
-		log.Fatal(err)
-		return
+		return err
 	}
+
+	return nil
 }
 
 // Loads config.json and appends a new Game entry to the file.
-// Accepts the game display name, the absolute path to the
-// game executable file and the path where config.json will be saved.
+// Creates a config.json file if it doesn't already exist.
 func saveGameToConfig(gameName string, pathToExecutable string,
-	configFileParentDir string) {
+	configFileParentDir string) error {
 	configFile := filepath.Join(configFileParentDir, "config.json")
 
 	if !fileExists(configFile) {
-		createEmptyConfigFileAt(configFileParentDir)
+		err := createEmptyConfigFileAt(configFileParentDir)
+		if err != nil {
+			return err
+		}
 	}
 
-	f := loadConfigFile(configFileParentDir)
+	f, err := loadConfigFile(configFileParentDir)
+	if err != nil {
+		return err
+	}
 
 	game := &Game{
 		Name:             gameName,
 		PathToExecutable: pathToExecutable,
 	}
 
-	appendNewGameToConfigFile(f, game, configFile)
+	err = appendNewGameToConfigFile(f, game, configFile)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Unmarshals fileData, appends a new game to it and saves the
 // new file in pathToConfigFile.
 func appendNewGameToConfigFile(fileData []byte, game *Game,
-	pathToConfigFile string) {
+	pathToConfigFile string) error {
 	dat := []Game{}
 	err := json.Unmarshal(fileData, &dat)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	dat = append(dat, *game)
 
 	b, err := json.MarshalIndent(dat, "", "    ")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	err = os.WriteFile(pathToConfigFile, b, os.ModePerm)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	return nil
 }
 
 // Removes the selected entry from config.json file.
-func removeGameFromConfig(index int, configFileParentDir string) {
+func removeGameFromConfig(index int, configFileParentDir string) error {
 	configFile := filepath.Join(configFileParentDir, "config.json")
 	games := []Game{}
-	json.Unmarshal(loadConfigFile(configFileParentDir), &games)
+	data, err := loadConfigFile(configFileParentDir)
+	if err != nil {
+		return fmt.Errorf("load config file failed: %w", err)
+	}
+
+	err = json.Unmarshal(data, &games)
+	if err != nil {
+		return fmt.Errorf("unmarshal failed: %w", err)
+	}
 
 	if len(games) == 0 {
-		log.Fatal("No games found!")
+		return ErrNoGamesFound
 	}
 
 	if index > len(games)-1 || index < 0 {
-		log.Fatal("Invalid option!")
+		return ErrInvalidOption
 	}
 
 	newGames := []Game{}
@@ -96,20 +121,22 @@ func removeGameFromConfig(index int, configFileParentDir string) {
 
 	jsonData, err := json.MarshalIndent(newGames, "", "    ")
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("marshal after removal failed: %w", err)
 	}
 
 	err = os.WriteFile(configFile, jsonData, os.ModePerm)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("save config file after removal failed: %w", err)
 	}
+
+	return nil
 }
 
-func loadConfigFile(configFileParentDir string) []byte {
+func loadConfigFile(configFileParentDir string) ([]byte, error) {
 	configFile := filepath.Join(configFileParentDir, "config.json")
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	return data
+	return data, nil
 }

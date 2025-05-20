@@ -18,11 +18,15 @@ func handleCommandLine() error {
 			showHelp()
 			return nil
 		case "add":
-			addGamePrompt(bufio.NewReader(os.Stdin))
-			return nil
+			err := addGamePrompt(bufio.NewReader(os.Stdin))
+			if err != nil {
+				return err
+			}
 		case "remove":
-			removeGamePrompt(bufio.NewReader(os.Stdin))
-			return nil
+			err := removeGamePrompt(bufio.NewReader(os.Stdin))
+			if err != nil {
+				return err
+			}
 		default:
 			showUsageOnInvalidOption(argsWithoutProg[n])
 			var ErrInvalidOption = fmt.Errorf(
