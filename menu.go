@@ -52,7 +52,7 @@ func addGamePrompt(reader *bufio.Reader) error {
 
 	gameName = strings.TrimSpace(gameName)
 	pathToExecutable = strings.TrimSpace(pathToExecutable)
-	pathToExecutable, err = getCleanPath(pathToExecutable)
+	pathToExecutable, err = getAbsolutePath(pathToExecutable)
 	if err != nil {
 		return err
 	}

@@ -1,9 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // Returns false if the path is a directory.
@@ -29,23 +29,11 @@ func deleteFile(path string) error {
 
 // Removes backslashes from path (if not Windows), expands variables,
 // expands tilde and makes the path absolute.
-func getCleanPath(s string) (string, error) {
-	if strings.Contains(s, "$") {
-		s = os.ExpandEnv(s)
-	}
-	if strings.HasPrefix(s, "~/") {
-		userHomeDir, err := os.UserHomeDir()
-		if err != nil {
-			return s, err
-		}
-		s = filepath.Join(userHomeDir, s[1:])
-
-	}
-
+func getAbsolutePath(s string) (string, error) {
 	if !filepath.IsAbs(s) {
 		s, err := filepath.Abs(s)
 		if err != nil {
-			return s, err
+			return s, fmt.Errorf("get absolute path failed: %w", err)
 		}
 
 		return s, nil

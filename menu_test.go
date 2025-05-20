@@ -74,10 +74,6 @@ func TestAddGamePrompt(t *testing.T) {
 		"cjk path": {
 			input:  fmt.Sprintf("test\n%s\n", fileWithCJK.Name()),
 			result: nil},
-		"path has env variables": {
-			input: fmt.Sprintf("test\n$TEST_TMPDIR/%s\n",
-				filepath.Base(f1.Name())),
-			result: nil},
 	}
 
 	for name, test := range tests {
