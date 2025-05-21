@@ -134,9 +134,13 @@ func removeGameFromConfig(index int, configFileParentDir string) error {
 
 func loadConfigFile(configFileParentDir string) ([]byte, error) {
 	configFile := filepath.Join(configFileParentDir, "config.json")
+	if !fileExists(configFile) {
+		return nil, ErrDoesNotExistOrIsADirectory
+	}
+
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read file failed: %w", err)
 	}
 	return data, nil
 }

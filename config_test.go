@@ -6,8 +6,62 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
+
+func TestLoadConfigFile(t *testing.T) {
+	deleteConfigFileFromTempDir(t)
+
+	game := []Game{{Name: "Test Game", PathToExecutable: "/test/path/here"}}
+	goodData, err := json.Marshal(game)
+	if err != nil {
+		t.Fatalf("error during marshal: %v", err)
+	}
+
+	emptyConfigFileDir := setupLoadConfigFileTest(t, nil)
+	badConfigFileDir := setupLoadConfigFileTest(t, []byte("test"))
+	goodEndingDir := setupLoadConfigFileTest(t, goodData)
+
+	tests := map[string]struct {
+		input    string
+		wantData []byte
+		wantErr  error
+	}{
+		"path doesnt exist": {
+			input:    "/some/404/path",
+			wantData: nil,
+			wantErr:  ErrDoesNotExistOrIsADirectory},
+		"empty config file": {
+			input:    emptyConfigFileDir,
+			wantData: []byte("[]"),
+			wantErr:  nil},
+		"bad config file": {
+			input:    badConfigFileDir,
+			wantData: []byte("test"),
+			wantErr:  nil},
+		"path is a dir": {
+			input:    os.TempDir(),
+			wantData: nil,
+			wantErr:  ErrDoesNotExistOrIsADirectory},
+		"good ending": {
+			input:    goodEndingDir,
+			wantData: goodData,
+			wantErr:  nil},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			gotData, gotErr := loadConfigFile(test.input)
+			if !slices.Equal(gotData, test.wantData) {
+				t.Errorf("got '%s'; want '%s'\n", gotData, test.wantData)
+			}
+			if !errors.Is(gotErr, test.wantErr) {
+				t.Errorf("got '%v'; want '%v'\n", gotErr, test.wantErr)
+			}
+		})
+	}
+}
 
 func TestAppendNewGameToConfigFileErrors(t *testing.T) {
 	// test if it appended correctly
@@ -320,4 +374,26 @@ func TestRemoveGameFromConfigInvalidOption(t *testing.T) {
 	if !errors.Is(err, ErrInvalidOption) {
 		t.Errorf("want %v; got %v;\n", ErrInvalidOption, err)
 	}
+}
+
+// Creates a directory in os.TempDir with a config.json inside it.
+// Optionally writes data to the config.json file.
+func setupLoadConfigFileTest(t *testing.T, data []byte) string {
+	dir, err := os.MkdirTemp("", "testdir")
+	if err != nil {
+		t.Fatalf("error creating dir: %v", err)
+	}
+	err = createEmptyConfigFileAt(dir)
+	if err != nil {
+		t.Fatalf("error creating config file: %v", err)
+	}
+	if data != nil {
+		f := filepath.Join(dir, "config.json")
+		err := os.WriteFile(f, data, os.ModePerm)
+		if err != nil {
+			t.Fatalf("error writing data to file: %v", err)
+		}
+	}
+
+	return dir
 }
