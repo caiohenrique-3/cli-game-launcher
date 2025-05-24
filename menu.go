@@ -25,12 +25,13 @@ func showHelp() {
 	fmt.Println("	add 			Add a new game")
 	fmt.Println("	remove			Remove a game")
 	fmt.Println("	run			Run a game")
+	fmt.Println("	list			Print all known games")
 	fmt.Println("	help			Print this help information and exit")
 }
 
 func showUsageOnInvalidOption(s string) {
 	fmt.Println("Usage: cli-game-launcher <command>")
-	fmt.Printf("[!] Invalid choice: '%v' (choose from add, remove, run, help)", s)
+	fmt.Printf("[!] Invalid choice: '%v' (choose from add, remove, list, run, help)\n", s)
 }
 
 func runGamePrompt(reader *bufio.Reader) error {

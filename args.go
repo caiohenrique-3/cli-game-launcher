@@ -27,6 +27,11 @@ func handleCommandLine() error {
 			if err != nil {
 				return err
 			}
+		case "list":
+			err := listGamesNumbered(programHome)
+			if err != nil {
+				return err
+			}
 		case "run":
 			err := runGamePrompt(bufio.NewReader(os.Stdin))
 			if err != nil {
