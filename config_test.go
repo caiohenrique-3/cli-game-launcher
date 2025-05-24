@@ -6,9 +6,41 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 )
+
+func TestGetGamesGoodEnding(t *testing.T) {
+	goodEndingGames := []Game{
+		{Name: "Test Game 1", PathToExecutable: "/test/path/bar"},
+		{Name: "Test Game 2", PathToExecutable: "/test/path/foo"}}
+
+	goodEndingData, err := json.Marshal(goodEndingGames)
+	if err != nil {
+		t.Fatalf("error during marshal: %v", err)
+	}
+
+	goodConfigFileDir := setupLoadConfigFileTest(t, goodEndingData)
+
+	games, err := getGames(goodConfigFileDir)
+	if !reflect.DeepEqual(games, goodEndingGames) {
+		t.Errorf("got '%v'; want '%v'\n", games, goodEndingGames)
+	}
+}
+
+func TestGetGamesBadConfigFile(t *testing.T) {
+	badConfigFileDir := setupLoadConfigFileTest(t, []byte("some data"))
+	games, err := getGames(badConfigFileDir)
+
+	var wantErr *json.SyntaxError
+	if !errors.As(err, &wantErr) {
+		t.Errorf("got '%v'; want '*json.SyntaxError'\n", err)
+	}
+	if games != nil {
+		t.Errorf("got '%v'; want '%v'\n", games, nil)
+	}
+}
 
 func TestLoadConfigFile(t *testing.T) {
 	deleteConfigFileFromTempDir(t)

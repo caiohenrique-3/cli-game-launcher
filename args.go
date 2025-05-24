@@ -27,6 +27,11 @@ func handleCommandLine() error {
 			if err != nil {
 				return err
 			}
+		case "run":
+			err := runGamePrompt(bufio.NewReader(os.Stdin))
+			if err != nil {
+				return err
+			}
 		default:
 			showUsageOnInvalidOption(argsWithoutProg[n])
 			var ErrInvalidOption = fmt.Errorf(

@@ -26,6 +26,6 @@ func init() {
 func main() {
 	err := handleCommandLine()
 	if err != nil {
-		os.Exit(1)
+		log.Fatalln(err)
 	}
 }

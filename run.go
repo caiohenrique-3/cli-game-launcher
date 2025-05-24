@@ -7,24 +7,23 @@ import (
 )
 
 // Executes a command and prints the output.
-func runNative() error {
-	cmd := exec.Command("./game.sh")
+func runNative(command string) error {
+	cmd := exec.Command(command)
 	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("command stdout pipe failed: %w", err)
+	}
+
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = cmd.Stdout
-	if err != nil {
-		return err
-	}
 
 	err = cmd.Start()
 	if err != nil {
-		return err
+		return fmt.Errorf("command failed: %w", err)
 	}
 
-	// https://stackoverflow.com/a/62630988
 	for {
-		// TODO: Try optimizing size of this slice.
-		tmp := make([]byte, 32)
+		tmp := make([]byte, 128)
 		_, err := stdout.Read(tmp)
 		fmt.Print(string(tmp))
 		if err != nil {

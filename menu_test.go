@@ -13,20 +13,81 @@ import (
 	"testing"
 )
 
-// Creates a dir and a file inside it with name + random numbers
-func setupAddGamePromptTest(t *testing.T, name string) *os.File {
-	d, err := os.MkdirTemp("", name)
+func TestGetIntFromUser(t *testing.T) {
+	deleteConfigFileFromTempDir(t)
+	f, err := createTempFileOnOsTempDir()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("error creating temp file: %v", err)
 	}
 
-	f, err := os.CreateTemp(d, name)
-	if err != nil {
-		t.Fatal("creating temp file on dir with emojis:", err)
+	for range 6 {
+		err := saveGameToConfig("Test Game", f.Name(), os.TempDir())
+		if err != nil {
+			t.Fatalf("error saving game to config: %v", err)
+		}
 	}
-	f.Close()
 
-	return f
+	orig := programHome
+	programHome = os.TempDir()
+	defer func() { programHome = orig }()
+
+	tests := map[string]struct {
+		input         string
+		wantReturnVal int
+		wantErr       error
+	}{
+		"empty string": {
+			input:   "\n",
+			wantErr: strconv.ErrSyntax},
+		"empty string 2": {
+			input:   "\n\n",
+			wantErr: strconv.ErrSyntax},
+		"good ending": {
+			input:         "4\n",
+			wantReturnVal: 4,
+			wantErr:       nil},
+		"input has spaces": {
+			input:         "2 \n",
+			wantReturnVal: 2,
+			wantErr:       nil},
+		"input has spaces 2": {
+			input:         " 2\n",
+			wantReturnVal: 2,
+			wantErr:       nil},
+		"input is negative": {
+			input:         "-2\n",
+			wantReturnVal: -2,
+			wantErr:       nil},
+		"input has emojis": {
+			input:   "😀\n",
+			wantErr: strconv.ErrSyntax},
+		"input has cjk": {
+			input:   "접는 사람 テスト 試験 史诗般的\n",
+			wantErr: strconv.ErrSyntax},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			r := bufio.NewReader(strings.NewReader(test.input))
+
+			sout := os.Stdout
+			serr := os.Stderr
+			os.Stdout = nil
+			os.Stderr = nil
+
+			userInput, err := getIntFromUser(r)
+
+			os.Stdout = sout
+			os.Stderr = serr
+
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("got '%v'; want '%v';\n", err, test.wantErr)
+			}
+			if userInput != test.wantReturnVal {
+				t.Fatalf("got '%v'; want '%v';\n", userInput, test.wantReturnVal)
+			}
+		})
+	}
 }
 
 func TestAddGamePrompt(t *testing.T) {
@@ -143,6 +204,9 @@ func TestListGamesNumbered(t *testing.T) {
 		"config file not found": {
 			input:  emptyDir,
 			result: ErrDoesNotExistOrIsADirectory},
+		"no games found": {
+			input:  emptyConfigDir,
+			result: ErrNoGamesFound},
 		"bad json": {
 			input:  badJsonDir,
 			result: &json.SyntaxError{Offset: 0},
@@ -156,10 +220,6 @@ func TestListGamesNumbered(t *testing.T) {
 		"good ending": {
 			input:  os.TempDir(),
 			result: fmt.Sprintf("[0] Test Game\n"),
-		},
-		"empty config": {
-			input:  emptyConfigDir,
-			result: "No games found\n",
 		},
 	}
 
@@ -289,4 +349,20 @@ func TestRemoveGamePrompt(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Creates a dir and a file inside it with name + random numbers
+func setupAddGamePromptTest(t *testing.T, name string) *os.File {
+	d, err := os.MkdirTemp("", name)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := os.CreateTemp(d, name)
+	if err != nil {
+		t.Fatal("creating temp file on dir with emojis:", err)
+	}
+	f.Close()
+
+	return f
 }

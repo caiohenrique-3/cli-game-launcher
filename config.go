@@ -144,3 +144,19 @@ func loadConfigFile(configFileParentDir string) ([]byte, error) {
 	}
 	return data, nil
 }
+
+// Scans a config file for games and returns them in the form of a slice.
+func getGames(configFileParentDir string) ([]Game, error) {
+	data, err := loadConfigFile(configFileParentDir)
+	if err != nil {
+		return nil, fmt.Errorf("load config file failed: %w", err)
+	}
+
+	games := []Game{}
+	err = json.Unmarshal(data, &games)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal failed: %w", err)
+	}
+
+	return games, nil
+}
