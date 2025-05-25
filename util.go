@@ -15,18 +15,6 @@ func fileExists(filename string) bool {
 	return !info.IsDir()
 }
 
-// If file exists, deletes it.
-func deleteFile(path string) error {
-	// TODO: Test when dir is not empty
-	if fileExists(path) {
-		err := os.Remove(path)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Removes backslashes from path (if not Windows), expands variables,
 // expands tilde and makes the path absolute.
 func getAbsolutePath(s string) (string, error) {

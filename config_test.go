@@ -314,12 +314,9 @@ func TestSaveGameToConfigCreatesConfigFileIfMissing(t *testing.T) {
 	f, testDir := setupTest(t)
 	configFile := filepath.Join(testDir, "config.json")
 
-	err := deleteFile(configFile)
-	if err != nil {
-		t.Error(err)
-	}
+	deleteConfigFileFromTempDir(t)
 
-	err = saveGameToConfig("Test Game", f.Name(), testDir)
+	err := saveGameToConfig("Test Game", f.Name(), testDir)
 	if err != nil {
 		t.Error(err)
 	}
