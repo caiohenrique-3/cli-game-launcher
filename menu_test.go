@@ -314,10 +314,9 @@ func TestRemoveGamePrompt(t *testing.T) {
 		"cjk input": {
 			input:  "史诗 テスト 파일\n",
 			result: strconv.ErrSyntax},
-		// TODO: should be ErrInvalidOption from config.go
-		// "less than zero": {
-		// 	input:  "-1\n",
-		// 	result: nil},
+		"less than zero": {
+			input:  "-1\n",
+			result: ErrInvalidOption},
 		"notation": {
 			input:  "1e9\n",
 			result: strconv.ErrSyntax},
