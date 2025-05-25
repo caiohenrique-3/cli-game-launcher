@@ -20,7 +20,6 @@ func showHelp() {
 	fmt.Println("cli-game-launcher [OPTIONS] [COMMAND]...")
 	fmt.Println("OPTIONS:")
 	fmt.Println("	-h, --help 		Print this help information and exit")
-	fmt.Println("	-q, --quiet 		Suppress terminal output when launching a game")
 	fmt.Println("COMMANDS:")
 	fmt.Println("	add 			Add a new game")
 	fmt.Println("	remove			Remove a game")
