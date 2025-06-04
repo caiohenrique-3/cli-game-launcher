@@ -131,6 +131,8 @@ func removeGameFromConfig(indexToRemove int, configFileParentDir string) error {
 		return fmt.Errorf("save config file after removal failed: %w", err)
 	}
 
+	fmt.Printf("'%s' removed.\n", games[indexToRemove].Name)
+
 	return nil
 }
 

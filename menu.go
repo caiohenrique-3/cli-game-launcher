@@ -95,6 +95,8 @@ func addGamePrompt(reader *bufio.Reader) error {
 		return fmt.Errorf("save game to config failed: %w", err)
 	}
 
+	fmt.Printf("'%s' added.\n", gameName)
+
 	return nil
 }
 
