@@ -2,21 +2,26 @@ package main
 
 import "testing"
 
-func TestFileExistsTrue(t *testing.T) {
-	f, err := createTempFileOnOsTempDir()
-	if err != nil {
-		t.Fatalf("error creating temp file: %v", err)
-	}
-
-	b := fileExists(f.Name())
-	if !b {
-		t.Errorf("got '%t'; want '%t'\n", b, true)
+func Test_FileExists_ReturnsTrue(t *testing.T) {
+	setupTestsDir(t)
+	pathToTempFile := createTempFileForTests(t)
+	bFileExists := fileExists(pathToTempFile)
+	if !bFileExists {
+		t.Errorf("got '%t'; want '%t';\n", bFileExists, true)
 	}
 }
 
-func TestExistsFalse(t *testing.T) {
-	b := fileExists("/mint/dragon/path/three")
-	if b {
-		t.Errorf("got: '%t'; want '%t'\n", b, false)
+func Test_FileExists_ReturnsFalse(t *testing.T) {
+	bFileExists := fileExists("")
+	if bFileExists {
+		t.Errorf("got: '%t'; want '%t';\n", bFileExists, false)
+	}
+}
+
+func Test_FileExists_ReturnsFalseIfPathIsADirectory(t *testing.T) {
+	setupTestsDir(t)
+	bFileExists := fileExists(testsDir)
+	if bFileExists {
+		t.Errorf("got '%t'; want '%t';\n", bFileExists, false)
 	}
 }

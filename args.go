@@ -28,7 +28,7 @@ func handleCommandLine() error {
 				return err
 			}
 		case "list":
-			err := listGamesNumbered(programHome)
+			err := listGamesNumbered(programHome, os.Stdout)
 			if err != nil {
 				return err
 			}

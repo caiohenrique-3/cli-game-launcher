@@ -6,19 +6,20 @@ import (
 	"path/filepath"
 )
 
+// Directory "cli-game-launcher" inside the OS user config dir.
 var programHome string
 
 func init() {
-	dirname, err := os.UserConfigDir()
+	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 		return
 	}
 
-	programHome = filepath.Join(dirname, "cli-game-launcher")
+	programHome = filepath.Join(userConfigDir, "cli-game-launcher")
 	err = os.MkdirAll(programHome, os.ModePerm)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 		return
 	}
 }

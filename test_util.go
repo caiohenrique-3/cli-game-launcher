@@ -1,56 +1,78 @@
 package main
 
 import (
+	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-func createTempFileOnOsTempDir() (*os.File, error) {
-	// empty string means use os.TempDir() return value
-	f, err := os.CreateTemp("", "test_file")
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return f, nil // calling .name() on this is safe after close
-}
+// "cgl-tests" inside OS temp directory.
+var testsDir string = filepath.Join(os.TempDir(), "cgl-tests")
 
-func deleteConfigFileFromTempDir(t *testing.T) {
-	f := filepath.Join(os.TempDir(), "config.json")
-	if fileExists(f) {
-		err := os.Remove(f)
+// Creates "cgl-tests" dir inside OS temp directory if it doesn't exist.
+func setupTestsDir(t *testing.T) {
+	_, err := os.Stat(testsDir)
+	if os.IsNotExist(err) {
+		err = os.Mkdir(testsDir, os.ModePerm)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("error creating tests dir: '%v'\n", err)
+		}
+	} else {
+		if err != nil {
+			t.Fatalf("error setting up tests dir: '%v'\n", err)
 		}
 	}
 }
 
-// Returns a temporary file and its parent dir.
-func setupTest(t *testing.T) (*os.File, string) {
-	f, err := createTempFileOnOsTempDir()
+// Creates an empty file in directory "cgl-tests" inside OS temp directory and
+// returns the path to it.
+func createTempFileForTests(t *testing.T) string {
+	testTempFile, err := os.CreateTemp(testsDir, "testTempFile")
 	if err != nil {
-		t.Error("error creating temp file:", err)
+		t.Errorf("error creating temp file: '%v'\n", err)
 	}
-	defer f.Close()
+	defer testTempFile.Close()
 
-	testDir := os.TempDir()
-
-	return f, testDir
+	return testTempFile.Name()
 }
 
-// ErrorContains checks if the error message in out contains the text in
-// want.
-//
-// This is safe when out is nil. Use an empty string for want if you want to
-// test that err is nil.
-func ErrorContains(out error, want string) bool {
-	if out == nil {
-		return want == ""
+// Reads testsDir global variable and creates a directory on that path
+// and a 'config.json' file inside the new directory.
+// Returns path to the new created directory.
+func createTempDirWithConfigFile(t *testing.T, configFileData []byte) string {
+	tempDir, err := os.MkdirTemp(testsDir, "testdir")
+	if err != nil {
+		t.Errorf("error creating temp dir: %v\n", err)
 	}
-	if want == "" {
-		return false
+	err = createEmptyConfigFileAt(tempDir)
+	if err != nil {
+		t.Errorf("error creating config file at temp dir: %v\n", err)
 	}
-	return strings.Contains(out.Error(), want)
+
+	if configFileData != nil {
+		f := filepath.Join(tempDir, "config.json")
+		err := os.WriteFile(f, configFileData, os.ModePerm)
+		if err != nil {
+			t.Errorf("error writing data to file: %v\n", err)
+		}
+	}
+
+	return tempDir
+}
+
+// Supresses output in the terminal.
+func quietOutput() func() {
+	null, _ := os.Open(os.DevNull)
+	sout := os.Stdout
+	serr := os.Stderr
+	os.Stdout = null
+	os.Stderr = null
+	log.SetOutput(null)
+	return func() {
+		defer null.Close()
+		os.Stdout = sout
+		os.Stderr = serr
+		log.SetOutput(os.Stderr)
+	}
 }

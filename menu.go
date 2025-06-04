@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -34,7 +36,7 @@ func showUsageOnInvalidOption(s string) {
 }
 
 func runGamePrompt(reader *bufio.Reader) error {
-	err := listGamesNumbered(programHome)
+	err := listGamesNumbered(programHome, os.Stdout)
 	if err != nil {
 		return fmt.Errorf("list games failed: %w", err)
 	}
@@ -64,33 +66,33 @@ func addGamePrompt(reader *bufio.Reader) error {
 	fmt.Print("Enter game name: ")
 	gameName, err := reader.ReadString('\n')
 	if err != nil {
-		return err
+		return fmt.Errorf("get game name failed: %w", err)
 	}
 
 	fmt.Print("Enter path to executable: ")
 	pathToExecutable, err := reader.ReadString('\n')
 	if err != nil {
-		return err
+		return fmt.Errorf("get executable path failed: %w", err)
 	}
 
 	gameName = strings.TrimSpace(gameName)
 	pathToExecutable = strings.TrimSpace(pathToExecutable)
-	pathToExecutable, err = getAbsolutePath(pathToExecutable)
-	if err != nil {
-		return err
+
+	if !filepath.IsAbs(pathToExecutable) {
+		newPathToExecutable, err := filepath.Abs(pathToExecutable)
+		if err != nil {
+			return fmt.Errorf("get absolute path failed: %w", err)
+		}
+		pathToExecutable = newPathToExecutable
 	}
 
-	b := fileExists(pathToExecutable)
-	if !b {
+	if !fileExists(pathToExecutable) {
 		return ErrDoesNotExistOrIsADirectory
 	}
 
-	fmt.Printf("\n[DEBUG] name: %v; path: %v, exists: %v\n",
-		gameName, pathToExecutable, b)
-
 	err = saveGameToConfig(gameName, pathToExecutable, programHome)
 	if err != nil {
-		return err
+		return fmt.Errorf("save game to config failed: %w", err)
 	}
 
 	return nil
@@ -98,7 +100,7 @@ func addGamePrompt(reader *bufio.Reader) error {
 
 // Shows the list of game entries in the config file and removes the user chosen option.
 func removeGamePrompt(reader *bufio.Reader) error {
-	err := listGamesNumbered(programHome)
+	err := listGamesNumbered(programHome, os.Stdout)
 	if err != nil {
 		return fmt.Errorf("list games failed: %w", err)
 	}
@@ -118,12 +120,7 @@ func removeGamePrompt(reader *bufio.Reader) error {
 
 // Looks for a file named config.json in the parentDir path and prints
 // the index and the game name of the entries in the file.
-func listGamesNumbered(parentDir string) error {
-	configFile := filepath.Join(parentDir, "config.json")
-	if !fileExists(configFile) {
-		return ErrDoesNotExistOrIsADirectory
-	}
-
+func listGamesNumbered(parentDir string, writer io.Writer) error {
 	games, err := getGames(parentDir)
 	if err != nil {
 		return fmt.Errorf("get games failed: %w", err)
@@ -138,7 +135,7 @@ func listGamesNumbered(parentDir string) error {
 		s = s + fmt.Sprintf("[%v] %v\n", i, game.Name)
 	}
 
-	fmt.Print(s)
+	fmt.Fprint(writer, s)
 	return nil
 }
 
@@ -150,10 +147,10 @@ func getIntFromUser(reader *bufio.Reader) (int, error) {
 	}
 
 	userInput = strings.TrimSpace(userInput)
-	intVal, err := strconv.Atoi(userInput)
+	intValue, err := strconv.Atoi(userInput)
 	if err != nil {
 		return 0, fmt.Errorf("string to int failed: %w", err)
 	}
 
-	return intVal, nil
+	return intValue, nil
 }
