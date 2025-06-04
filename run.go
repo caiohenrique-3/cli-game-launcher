@@ -1,34 +1,22 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"os"
+	"io"
 	"os/exec"
 )
 
 // Executes a command and prints the output.
-func runNative(command string) error {
+func runNative(command string, reader *bufio.Reader, writer io.Writer) error {
 	cmd := exec.Command(command)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("command stdout pipe failed: %w", err)
-	}
-
-	cmd.Stdin = os.Stdin
+	cmd.Stdout = writer
+	cmd.Stdin = reader
 	cmd.Stderr = cmd.Stdout
 
-	err = cmd.Start()
+	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("command failed: %w", err)
-	}
-
-	for {
-		tmp := make([]byte, 128)
-		_, err := stdout.Read(tmp)
-		fmt.Print(string(tmp))
-		if err != nil {
-			break
-		}
 	}
 
 	return nil

@@ -51,7 +51,7 @@ func runGamePrompt(reader *bufio.Reader) error {
 		return fmt.Errorf("get games failed: %w", err)
 	}
 
-	err = runNative(games[userInput].PathToExecutable)
+	err = runNative(games[userInput].PathToExecutable, reader, os.Stdout)
 	if err != nil {
 		return fmt.Errorf("run %v failed: %w", userInput, err)
 	}
