@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type Game struct {
 	Name             string `json:"name"`
 	PathToExecutable string `json:"pathToExecutable"`
+	TimeSpentPlaying string `json:"timeSpentPlaying"`
 }
 
 var ErrInvalidOption = errors.New("invalid option")
@@ -161,4 +163,33 @@ func getGames(configFileParentDir string) ([]Game, error) {
 	}
 
 	return games, nil
+}
+
+func saveTimeSpentPlayingToConfig(games []Game, gameIndexToUpdate int,
+	timeSpentPlaying time.Duration, pathToConfigFile string) error {
+	// Getting new time spent playing
+	currentTimeSpentPlayingString := games[gameIndexToUpdate].TimeSpentPlaying
+	currentTimeSpentPlayingDuration, err := time.
+		ParseDuration(currentTimeSpentPlayingString)
+	if err != nil {
+		return fmt.Errorf("parse duration failed: %w", err)
+	}
+
+	newTimeSpentPlayingDuration := currentTimeSpentPlayingDuration + timeSpentPlaying
+
+	// Update it in the slice
+	games[gameIndexToUpdate].TimeSpentPlaying = newTimeSpentPlayingDuration.String()
+
+	// Save updated data to config file
+	newConfigFileData, err := json.Marshal(games)
+	if err != nil {
+		return fmt.Errorf("marshal new config file data failed: %w", err)
+	}
+
+	err = os.WriteFile(pathToConfigFile, newConfigFileData, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("write to config file failed: %w", err)
+	}
+
+	return nil
 }

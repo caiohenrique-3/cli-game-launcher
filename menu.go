@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 )
 
 var ErrDoesNotExistOrIsADirectory = errors.New("file does not exist or is a directory.")
@@ -27,6 +28,7 @@ func showHelp() {
 	fmt.Println("	remove			Remove a game")
 	fmt.Println("	run			Run a game")
 	fmt.Println("	list			Print all known games")
+	fmt.Println("	playtime		Print time spent playing")
 	fmt.Println("	help			Print this help information and exit")
 }
 
@@ -51,9 +53,19 @@ func runGamePrompt(reader *bufio.Reader) error {
 		return fmt.Errorf("get games failed: %w", err)
 	}
 
-	err = runNative(games[userInput].PathToExecutable, reader, os.Stdout)
+	// Running game
+	timeSpentPlaying, err :=
+		runNative(games[userInput].PathToExecutable, reader, os.Stdout)
 	if err != nil {
 		return fmt.Errorf("run %v failed: %w", userInput, err)
+	}
+
+	// Saving playtime
+	pathToConfigFile := filepath.Join(programHome, "config.json")
+	err = saveTimeSpentPlayingToConfig(games, userInput,
+		timeSpentPlaying, pathToConfigFile)
+	if err != nil {
+		return fmt.Errorf("save time spent playing failed: %w", err)
 	}
 
 	return nil
@@ -155,4 +167,41 @@ func getIntFromUser(reader *bufio.Reader) (int, error) {
 	}
 
 	return intValue, nil
+}
+
+func listGamesWithPlaytime(configFileParentDir string, writer io.Writer) error {
+	games, err := getGames(configFileParentDir)
+	if err != nil {
+		return fmt.Errorf("get games failed: %w", err)
+	}
+
+	padding := 3
+	tw := tabwriter.
+		NewWriter(writer, 0, 0, padding, ' ', tabwriter.AlignRight)
+
+	stringHeader := "Game Name\tTime Spent Playing\t"
+
+	fmt.Fprintln(tw, stringHeader)
+	for _, game := range games {
+		var gameRow string
+		gameTimeSpentNoSpaces := strings.TrimSpace(game.TimeSpentPlaying)
+		// Without this check it would print an empty string.
+		if gameTimeSpentNoSpaces != "" {
+			gameRow = game.Name +
+				"\t" +
+				gameTimeSpentNoSpaces +
+				"\t"
+		} else {
+			gameRow = game.Name +
+				"\t" +
+				"0h0m0s" +
+				"\t"
+		}
+
+		fmt.Fprintln(tw, gameRow)
+	}
+
+	tw.Flush()
+
+	return nil
 }

@@ -37,6 +37,11 @@ func handleCommandLine() error {
 			if err != nil {
 				return err
 			}
+		case "playtime":
+			err := listGamesWithPlaytime(programHome, os.Stdout)
+			if err != nil {
+				return err
+			}
 		default:
 			showUsageOnInvalidOption(argsWithoutProg[n])
 			var ErrInvalidOption = fmt.Errorf(

@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -249,6 +250,59 @@ func Test_GetIntFromUser(t *testing.T) {
 				t.Errorf("got '%v'; want '%v';\n", userInput, test.wantReturnVal)
 			}
 		})
+	}
+}
+
+func Test_ListGamesWithPlaytime_HappyPath(t *testing.T) {
+	setupTestsDir(t)
+	games := []Game{{
+		Name:             "Super Race 2",
+		PathToExecutable: "",
+		TimeSpentPlaying: "2h0m0s"}}
+
+	configFileData, err := json.Marshal(games)
+	if err != nil {
+		t.Errorf("error marshaling config file data: %v\n", err)
+	}
+	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
+
+	var b bytes.Buffer
+	err = listGamesWithPlaytime(configFileParentDir, &b)
+	if err != nil {
+		t.Errorf("got '%v'; want nil;\n", err)
+	}
+
+	gotOutput := b.String()
+	if !strings.Contains(gotOutput, "Super Race 2") {
+		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, "Super Race 2")
+	}
+	if !strings.Contains(gotOutput, "2h0m0s") {
+		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, "2h0m0s")
+	}
+}
+
+func Test_ListGamesWithPlaytime_ChecksForTimeSpentEmptyString(t *testing.T) {
+	setupTestsDir(t)
+	games := []Game{{
+		Name:             "Super Race 2",
+		PathToExecutable: "",
+		TimeSpentPlaying: ""}}
+
+	configFileData, err := json.Marshal(games)
+	if err != nil {
+		t.Errorf("error marshaling config file data: %v\n", err)
+	}
+	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
+
+	var b bytes.Buffer
+	err = listGamesWithPlaytime(configFileParentDir, &b)
+	if err != nil {
+		t.Errorf("got '%v'; want nil;\n", err)
+	}
+
+	gotOutput := b.String()
+	if !strings.Contains(gotOutput, "0h0m0s") {
+		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, "0h0m0s")
 	}
 }
 

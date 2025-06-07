@@ -42,7 +42,7 @@ func Test_RunNative_HappyPath(t *testing.T) {
 
 	var writer bytes.Buffer
 	reader := bufio.NewReader(strings.NewReader("Test data\n"))
-	err = runNative(pathToBashScript, reader, &writer)
+	_, err = runNative(pathToBashScript, reader, &writer)
 	if err != nil {
 		t.Errorf("got: '%v'; want nil;\n", err)
 	}

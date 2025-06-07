@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+	"time"
 )
 
 func Test_CreateEmptyConfigFileAt_PathIsNotADirectory(t *testing.T) {
@@ -325,5 +326,39 @@ func Test_GetGames_InvalidConfigFile(t *testing.T) {
 	}
 	if games != nil {
 		t.Errorf("got '%v'; want '%v'\n", games, nil)
+	}
+}
+
+func Test_SaveTimeSpentPlayingToConfig_HappyPath(t *testing.T) {
+	setupTestsDir(t)
+	games := []Game{{
+		Name:             "TestGame",
+		PathToExecutable: "",
+		TimeSpentPlaying: "0h0m0s"}}
+	configFileData, err := json.Marshal(games)
+	if err != nil {
+		t.Errorf("error marshaling games: %v\n", err)
+	}
+
+	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
+	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
+	timeSpentPlaying := time.Duration(2) * time.Hour
+	userInput := 0
+
+	err = saveTimeSpentPlayingToConfig(games, userInput, timeSpentPlaying, pathToConfigFile)
+	if err != nil {
+		t.Errorf("got: '%v'; want nil;\n", err)
+	}
+
+	newConfigFileData, err := loadConfigFile(configFileParentDir)
+	var newGames []Game
+	err = json.Unmarshal(newConfigFileData, &newGames)
+	if err != nil {
+		t.Errorf("error unmarshaling new config file: %v\n", err)
+	}
+
+	gotTimeSpentPlaying := newGames[0].TimeSpentPlaying
+	if gotTimeSpentPlaying != timeSpentPlaying.String() {
+		t.Errorf("got: '%s'; want '%s';\n", gotTimeSpentPlaying, timeSpentPlaying)
 	}
 }
