@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 )
 
 var ErrDoesNotExistOrIsADirectory = errors.New("file does not exist or is a directory.")
@@ -54,6 +55,7 @@ func runGamePrompt(reader *bufio.Reader) error {
 	}
 
 	// Running game
+	timeStart := time.Now() // This is needed for saving to logs later.
 	timeSpentPlaying, err :=
 		runNative(games[userInput].PathToExecutable, reader, os.Stdout)
 	if err != nil {
@@ -66,6 +68,14 @@ func runGamePrompt(reader *bufio.Reader) error {
 		timeSpentPlaying, pathToConfigFile)
 	if err != nil {
 		return fmt.Errorf("save time spent playing failed: %w", err)
+	}
+
+	// Saving gaming session to logs
+	pathToLogFile := filepath.Join(programHome, "logs.json")
+	timeEnd := timeStart.Add(timeSpentPlaying)
+	err = saveSessionToLogs(games[userInput].Name, timeStart, timeEnd, pathToLogFile)
+	if err != nil {
+		return fmt.Errorf("log session failed: %w", err)
 	}
 
 	return nil
