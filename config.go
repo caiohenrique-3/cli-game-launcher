@@ -57,6 +57,7 @@ func saveGameToConfig(gameName string, pathToExecutable string,
 	game := &Game{
 		Name:             gameName,
 		PathToExecutable: pathToExecutable,
+		TimeSpentPlaying: "0h0m0s",
 	}
 
 	err = appendNewGameToConfigFile(configFileData, game, configFile)
