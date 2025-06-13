@@ -176,6 +176,7 @@ func saveTimeSpentPlayingToConfig(games []Game, gameIndexToUpdate int,
 	}
 
 	newTimeSpentPlayingDuration := currentTimeSpentPlayingDuration + timeSpentPlaying
+	newTimeSpentPlayingDuration = newTimeSpentPlayingDuration.Round(time.Second)
 
 	// Update it in the slice
 	games[gameIndexToUpdate].TimeSpentPlaying = newTimeSpentPlayingDuration.String()
