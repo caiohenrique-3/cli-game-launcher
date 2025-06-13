@@ -165,6 +165,8 @@ func getGames(configFileParentDir string) ([]Game, error) {
 	return games, nil
 }
 
+// Called after the game is finished running,
+// updates playtime of the game in the config file.
 func saveTimeSpentPlayingToConfig(games []Game, gameIndexToUpdate int,
 	timeSpentPlaying time.Duration, pathToConfigFile string) error {
 	// Getting new time spent playing
@@ -182,7 +184,7 @@ func saveTimeSpentPlayingToConfig(games []Game, gameIndexToUpdate int,
 	games[gameIndexToUpdate].TimeSpentPlaying = newTimeSpentPlayingDuration.String()
 
 	// Save updated data to config file
-	newConfigFileData, err := json.Marshal(games)
+	newConfigFileData, err := json.MarshalIndent(games, "", "    ")
 	if err != nil {
 		return fmt.Errorf("marshal new config file data failed: %w", err)
 	}
