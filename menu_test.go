@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func Test_AddGamePrompt(t *testing.T) {
@@ -303,6 +304,158 @@ func Test_ListGamesWithPlaytime_ChecksForTimeSpentEmptyString(t *testing.T) {
 	gotOutput := b.String()
 	if !strings.Contains(gotOutput, "0h0m0s") {
 		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, "0h0m0s")
+	}
+}
+
+func Test_ListGamesWithLastPlayed_HappyPath(t *testing.T) {
+	setupTestsDir(t)
+	configFileParentDir := createTempDirWithConfigFile(t, nil)
+	pathToTempFile := createTempFileForTests(t)
+	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
+
+	for i := range 3 {
+		err := saveGameToConfig("Test Game"+strconv.Itoa(i), pathToTempFile, configFileParentDir)
+		if err != nil {
+			t.Errorf("[%d] error saving game to config: %v\n", i, err)
+		}
+	}
+
+	// Creating logs.json file with necessary data
+	time6DaysAgo := time.Now().AddDate(0, 0, -6)
+	timeToday := time.Now()
+
+	time6DaysAgoString := fmt.
+		Sprintf("[%s] Played '%s' from 12:00 to 12:30.\n",
+			time6DaysAgo.Format(time.DateOnly),
+			"Test Game1")
+	timeTodayString := fmt.
+		Sprintf("[%s] Played '%s' from 12:00 to 12:30.\n",
+			timeToday.Format(time.DateOnly),
+			"Test Game2")
+	// Removed/hidden because the game name is not in the config file.
+	// For testing to see if the function will include this in the output
+	// (It should not).
+	hiddenGameString := fmt.
+		Sprintf("[%s] Played '%s' from 12:00 to 12:30.\n",
+			timeToday.Format(time.DateOnly),
+			"Test Game5")
+
+	var sb strings.Builder
+	// Not checking for sb errors here because the test will fail
+	// if these are not right anyway.
+	sb.WriteString(time6DaysAgoString)
+	sb.WriteString(timeTodayString)
+	sb.WriteString(hiddenGameString)
+
+	logFileDataString := sb.String()
+
+	err := os.WriteFile(pathToLogFile, []byte(logFileDataString), os.ModePerm)
+	if err != nil {
+		t.Errorf("error writing to log file: %v\n", err)
+	}
+
+	var b bytes.Buffer
+	err = listGamesWithLastPlayed(configFileParentDir, &b)
+	if err != nil {
+		t.Errorf("got: '%v'; want nil;\n", err)
+	}
+
+	gotOutput := b.String()
+	if !strings.Contains(gotOutput, "Today") {
+		t.Errorf("got: \n'%s'; must contain: '%s';\n", gotOutput, "Today")
+	}
+	if !strings.Contains(gotOutput, "6 days ago") {
+		t.Errorf("got: \n'%s'; must contain: '%s';\n", gotOutput, "6 days ago")
+	}
+	if strings.Contains(gotOutput, "Test Game5") {
+		t.Errorf("got: \n'%s'; must NOT contain: '%s';\n", gotOutput, "Test Game5")
+	}
+}
+
+func Test_ListGamesWithLastPlayed_SkipsEmptyNamesAndDates(t *testing.T) {
+	setupTestsDir(t)
+	configFileParentDir := createTempDirWithConfigFile(t, nil)
+	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
+
+	emptyLogEntryString := "[] Played '' from 12:00 to 12:30.\n"
+
+	err := os.WriteFile(pathToLogFile, []byte(emptyLogEntryString), os.ModePerm)
+	if err != nil {
+		t.Errorf("error writing to log file: %v\n", err)
+	}
+
+	var b bytes.Buffer
+	err = listGamesWithLastPlayed(configFileParentDir, &b)
+	if err != nil {
+		t.Errorf("got: '%v'; want nil;\n", err)
+	}
+
+	gotOutput := b.String()
+	// No games found because it skips log lines with
+	// empty stuff.
+	wantOutput := "No games found in log file.\n"
+	if gotOutput != wantOutput {
+		t.Errorf("got: '%s'; want: '%s';\n", gotOutput, wantOutput)
+	}
+}
+
+func Test_ListGamesWithLastPlayed_NoGamesFound(t *testing.T) {
+	setupTestsDir(t)
+	configFileParentDir := createTempDirWithConfigFile(t, nil)
+	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
+
+	err := os.WriteFile(pathToLogFile, nil, os.ModePerm)
+	if err != nil {
+		t.Errorf("error writing to log file: %v\n", err)
+	}
+
+	var b bytes.Buffer
+	err = listGamesWithLastPlayed(configFileParentDir, &b)
+	if err != nil {
+		t.Errorf("got: '%v'; want nil;\n", err)
+	}
+
+	gotOutput := b.String()
+	wantOutput := "No games found in log file.\n"
+	if gotOutput != wantOutput {
+		t.Errorf("got: '%s'; want: '%s';\n", gotOutput, wantOutput)
+	}
+}
+
+func Test_ListGamesWithLastPlayed_Prints1DayAgo(t *testing.T) {
+	setupTestsDir(t)
+	configFileParentDir := createTempDirWithConfigFile(t, nil)
+	pathToTempFile := createTempFileForTests(t)
+	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
+
+	err := saveGameToConfig("Test Game", pathToTempFile, configFileParentDir)
+	if err != nil {
+		t.Errorf("error saving game to config: %v\n", err)
+	}
+
+	// Creating logs.json file with necessary data
+	time1DayAgo := time.Now().AddDate(0, 0, -1)
+
+	time1DayAgoString := fmt.
+		Sprintf("[%s] Played '%s' from 12:00 to 12:30.\n",
+			time1DayAgo.Format(time.DateOnly),
+			"Test Game")
+
+	err = os.WriteFile(pathToLogFile, []byte(time1DayAgoString), os.ModePerm)
+	if err != nil {
+		t.Errorf("error writing to log file: %v\n", err)
+	}
+
+	var b bytes.Buffer
+	err = listGamesWithLastPlayed(configFileParentDir, &b)
+	if err != nil {
+		t.Errorf("got: '%v'; want nil;\n", err)
+	}
+
+	gotOutput := b.String()
+	if !strings.Contains(gotOutput, "1 day ago") {
+		t.Errorf("got: \n'%s'; must contain: '%s';\n",
+			gotOutput, "1 day ago")
 	}
 }
 
