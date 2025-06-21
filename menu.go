@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -182,7 +181,7 @@ func getIntFromUser(reader *bufio.Reader) (int, error) {
 	return intValue, nil
 }
 
-// Prints a table with the game name and time spent playing that game.
+// Prints a table with games and the time spent playing them.
 func listGamesWithPlaytime(configFileParentDir string, writer io.Writer) error {
 	games, err := getGames(configFileParentDir)
 	if err != nil {
@@ -216,85 +215,14 @@ func listGamesWithPlaytime(configFileParentDir string, writer io.Writer) error {
 	return nil
 }
 
-/*
-Reads 'logs.json' file inside config file parent dir
-and, if the game from the log entry is also in the config
-file (that means it's not removed), it prints the game name
-and it's last played date, alongside how many days ago it was.
-*/
+// Prints a table with games and their last played date.
 func listGamesWithLastPlayed(configFileParentDir string, writer io.Writer) error {
-	gamesInConfigFile, err := getGames(configFileParentDir)
+	games, err := getGamesWithLastPlayedTime(configFileParentDir)
 	if err != nil {
 		return fmt.Errorf("get games failed: %w", err)
 	}
 
-	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
-	logFile, err := os.Open(pathToLogFile)
-	if err != nil {
-		return fmt.Errorf("open log file failed: %w", err)
-	}
-	defer logFile.Close()
-
-	// Size of the file is needed for the backwards Scanner
-	logFileInfo, err := os.Stat(pathToLogFile)
-	if err != nil {
-		return fmt.Errorf("read log file info failed: %w", err)
-	}
-
-	gamesWithLastPlayedDate := make(map[string]time.Time, len(gamesInConfigFile))
-	reDate := regexp.MustCompile(`\[(.*?)\]`)
-	reGameName := regexp.MustCompile(`\'(.*?)\'`)
-	backScanner := NewScanner(logFile, int(logFileInfo.Size()))
-
-	/* Reading log file line by line, starting by the end to the start,
-	 extracting date and game name.
-	Example: [2025-06-13] Played 'My Game' from 14:26 to 14:27. */
-	for {
-		line, _, err := backScanner.Line()
-		if err != nil {
-			if !errors.Is(err, io.EOF) {
-				return fmt.Errorf("scan line failed: %w", err)
-			} else {
-				break
-			}
-		}
-
-		if line != "" {
-			// Using regex to find date and game name
-			dateMatch := reDate.FindStringSubmatch(line)
-			gameNameMatch := reGameName.FindStringSubmatch(line)
-			if gameNameMatch[1] == "" || dateMatch[1] == "" {
-				continue
-			}
-
-			for _, game := range gamesInConfigFile {
-				/* Check if the game extracted from the log file
-				is also on the config file, to prevent deleted
-				games from showing up in the output*/
-				if game.Name != gameNameMatch[1] {
-					continue
-				}
-
-				/* If key exists, we don't need to update it,
-				since we are reading from the end of the file
-				to the start, the first entry we came across is
-				already the most recent one.*/
-				if _, ok := gamesWithLastPlayedDate[game.Name]; ok {
-					continue
-				}
-
-				lastTimePlayed, err := time.
-					ParseInLocation(
-						time.DateOnly, dateMatch[1], time.UTC)
-				if err != nil {
-					return fmt.Errorf("parse date failed: %w", err)
-				}
-				gamesWithLastPlayedDate[game.Name] = lastTimePlayed
-			}
-		}
-	}
-
-	if len(gamesWithLastPlayedDate) == 0 {
+	if len(games) == 0 {
 		fmt.Fprintln(writer, "No games found in log file.")
 		return nil
 	}
@@ -310,7 +238,7 @@ func listGamesWithLastPlayed(configFileParentDir string, writer io.Writer) error
 	var gameRows strings.Builder
 	timeNow := time.Now().UTC()
 
-	for gameName, lastPlayedTime := range gamesWithLastPlayedDate {
+	for gameName, lastPlayedTime := range games {
 		if _, err := gameRows.WriteString(fmt.
 			Sprintf("%s\t", gameName)); err != nil {
 			return fmt.Errorf("string builder write failed: %w", err)
@@ -353,7 +281,7 @@ func listGamesWithLastPlayed(configFileParentDir string, writer io.Writer) error
 	return nil
 }
 
-// Prints table with game names and total time played in the last two weeks.
+// Prints a table with games and the time spent playing them in the last two weeks.
 func listGamesWithPlaytimeLastTwoWeeks(configFileParentDir string, writer io.Writer) error {
 	games, totalPlaytime, err :=
 		getGamesWithPlaytimeLastTwoWeeks(configFileParentDir)

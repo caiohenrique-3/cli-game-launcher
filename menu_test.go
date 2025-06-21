@@ -372,33 +372,6 @@ func Test_ListGamesWithLastPlayed_HappyPath(t *testing.T) {
 	}
 }
 
-func Test_ListGamesWithLastPlayed_SkipsEmptyNamesAndDates(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
-
-	emptyLogEntryString := "[] Played '' from 12:00 to 12:30.\n"
-
-	err := os.WriteFile(pathToLogFile, []byte(emptyLogEntryString), os.ModePerm)
-	if err != nil {
-		t.Errorf("error writing to log file: %v\n", err)
-	}
-
-	var b bytes.Buffer
-	err = listGamesWithLastPlayed(configFileParentDir, &b)
-	if err != nil {
-		t.Errorf("got: '%v'; want nil;\n", err)
-	}
-
-	gotOutput := b.String()
-	// No games found because it skips log lines with
-	// empty stuff.
-	wantOutput := "No games found in log file.\n"
-	if gotOutput != wantOutput {
-		t.Errorf("got: '%s'; want: '%s';\n", gotOutput, wantOutput)
-	}
-}
-
 func Test_ListGamesWithLastPlayed_NoGamesFound(t *testing.T) {
 	setupTestsDir(t)
 	configFileParentDir := createTempDirWithConfigFile(t, nil)

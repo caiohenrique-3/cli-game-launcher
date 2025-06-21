@@ -10,6 +10,126 @@ import (
 	"time"
 )
 
+// Saves name of the game played, time start and end to 'logs.json' file.
+func saveSessionToLogs(gameName string, timeStart time.Time,
+	timeEnd time.Time, pathToLogFile string) error {
+	timeStartDateString := timeStart.Format(time.DateOnly)
+	timeEndDateString := timeEnd.Format(time.DateOnly)
+	var stringToAppend string
+
+	if timeStartDateString != timeEndDateString {
+		// That means the date has changed from when it started.
+		// [2006-01-02] Played 'game' from 15:04 to 2015-07-03 15:32.
+		stringToAppend = fmt.Sprintf("[%s] Played '%s' from %s to %s.\n",
+			timeStartDateString,
+			gameName,
+			timeStart.Format("15:04"),
+			timeEnd.Format("2006-01-02 15:04"))
+	} else {
+		// [2006-01-02] Played 'game' from 15:04 to 15:32.
+		stringToAppend = fmt.Sprintf("[%s] Played '%s' from %s to %s.\n",
+			timeStartDateString,
+			gameName,
+			timeStart.Format("15:04"),
+			timeEnd.Format("15:04"))
+	}
+
+	logFile, err := os.OpenFile(pathToLogFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		return fmt.Errorf("open log file failed: %w", err)
+	}
+	defer logFile.Close()
+
+	_, err = logFile.WriteString(stringToAppend)
+	if err != nil {
+		return fmt.Errorf("write to log file failed: %w", err)
+	}
+
+	return nil
+}
+
+// Returns a map of games with their last played times.
+func getGamesWithLastPlayedTime(configFileParentDir string) (map[string]time.Time, error) {
+	gamesInConfigFile, err := getGames(configFileParentDir)
+	if err != nil {
+		return nil, fmt.Errorf("get games failed: %w", err)
+	}
+
+	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
+	logFile, err := os.Open(pathToLogFile)
+	if err != nil {
+		return nil, fmt.Errorf("open log file failed: %w", err)
+	}
+	defer logFile.Close()
+
+	// Size of the file is needed for the backwards Scanner
+	logFileInfo, err := os.Stat(pathToLogFile)
+	if err != nil {
+		return nil, fmt.Errorf("read log file info failed: %w", err)
+	}
+
+	gamesWithLastPlayedDate := make(map[string]time.Time, len(gamesInConfigFile))
+	regexDate := regexp.MustCompile(`\[(.*?)\]`)
+	regexGameName := regexp.MustCompile(`\'(.*?)\'`)
+	regexTime := regexp.MustCompile(`\d{2}:\d{2}`)
+	backScanner := NewScanner(logFile, int(logFileInfo.Size()))
+
+	/* Reading log file line by line, starting by the end to the start,
+	 extracting date and game name.
+	Example: [2025-06-13] Played 'My Game' from 14:26 to 14:27. */
+	for {
+		line, _, err := backScanner.Line()
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				return nil, fmt.Errorf("scan line failed: %w", err)
+			} else {
+				return gamesWithLastPlayedDate, nil
+			}
+		}
+
+		if line == "" {
+			continue
+		}
+
+		dateMatch := regexDate.FindStringSubmatch(line)
+		gameNameMatch := regexGameName.FindStringSubmatch(line)
+		timesMatch := regexTime.FindAllString(line, 2)
+		if gameNameMatch[1] == "" || dateMatch[1] == "" ||
+			len(timesMatch) != 2 {
+			continue
+		}
+
+		for _, game := range gamesInConfigFile {
+			/* Check if the game extracted from the log file
+			is also on the config file, to prevent deleted
+			games from showing up in the output*/
+			if game.Name != gameNameMatch[1] {
+				continue
+			}
+
+			/* If key exists, we don't need to update it,
+			since we are reading from the end of the file
+			to the start, the first entry we came across is
+			already the most recent one.*/
+			if _, ok := gamesWithLastPlayedDate[game.Name]; ok {
+				continue
+			}
+
+			startDateFromLogs := dateMatch[1]
+			endHourFromLogs := timesMatch[1]
+
+			lastTimePlayed, err := getTimeFromStrings(startDateFromLogs,
+				endHourFromLogs)
+			if err != nil {
+				return nil, fmt.Errorf("get time from strings failed: %w",
+					err)
+			}
+
+			gamesWithLastPlayedDate[game.Name] = lastTimePlayed
+		}
+	}
+}
+
 // Returns a map of games with their playtimes and the
 // total playtime across all games in the last two weeks.
 func getGamesWithPlaytimeLastTwoWeeks(
