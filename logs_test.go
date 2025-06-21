@@ -285,3 +285,24 @@ func Test_GetGamesWithPlaytimeLastTwoWeeks_HappyPath(t *testing.T) {
 		}
 	}
 }
+
+func Test_GetGamesWithPlaytimeLastTwoWeeks_SkipsEmptyNamesAndDates(t *testing.T) {
+	setupTestsDir(t)
+	configFileParentDir := createTempDirWithConfigFile(t, nil)
+	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
+
+	emptyLogEntryString := "[] Played '' from 12:00 to 12:30.\n"
+
+	err := os.WriteFile(pathToLogFile, []byte(emptyLogEntryString), os.ModePerm)
+	if err != nil {
+		t.Errorf("error writing to log file: %v\n", err)
+	}
+
+	games, _, err := getGamesWithPlaytimeLastTwoWeeks(configFileParentDir)
+	if err != nil {
+		t.Errorf("got: '%v'; want nil;\n", err)
+	}
+	if len(games) != 0 {
+		t.Errorf("got: '%d'; want: '%d';\n", len(games), 0)
+	}
+}
