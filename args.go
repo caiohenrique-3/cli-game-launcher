@@ -47,6 +47,11 @@ func handleCommandLine() error {
 			if err != nil {
 				return err
 			}
+		case "last-two-weeks":
+			err := listGamesWithPlaytimeLastTwoWeeks(programHome, os.Stdout)
+			if err != nil {
+				return err
+			}
 		default:
 			showUsageOnInvalidOption(argsWithoutProg[n])
 			var ErrInvalidOption = fmt.Errorf(

@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func Test_FileExists_ReturnsTrue(t *testing.T) {
 	setupTestsDir(t)
@@ -23,5 +26,23 @@ func Test_FileExists_ReturnsFalseIfPathIsADirectory(t *testing.T) {
 	bFileExists := fileExists(testsDir)
 	if bFileExists {
 		t.Errorf("got '%t'; want '%t';\n", bFileExists, false)
+	}
+}
+
+func Test_GetTimeFromStrings_HappyPath(t *testing.T) {
+	dateStr := "2025-09-12"
+	hourStr := "16:49"
+	got, err := getTimeFromStrings(dateStr, hourStr)
+	gotDate := got.Format(time.DateOnly)
+	gotTime := got.Format("15:04")
+
+	if err != nil {
+		t.Errorf("got '%v'; want nil;\n", err)
+	}
+	if gotDate != dateStr {
+		t.Errorf("got '%s'; want '%s';\n", gotDate, dateStr)
+	}
+	if gotTime != hourStr {
+		t.Errorf("got '%s'; want '%s';\n", gotTime, hourStr)
 	}
 }

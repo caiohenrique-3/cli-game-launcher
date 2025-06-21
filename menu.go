@@ -32,12 +32,13 @@ func showHelp() {
 	fmt.Println("	list			Display all games")
 	fmt.Println("	playtime		Show playtime for each game")
 	fmt.Println("	last-played		View last played dates")
+	fmt.Println("	last-two-weeks		Show playtime for last two weeks")
 	fmt.Println("	help			Print this help information and exit")
 }
 
 func showUsageOnInvalidOption(s string) {
 	fmt.Println("Usage: cli-game-launcher <command>")
-	fmt.Printf("[!] Invalid choice: '%v' (choose from add, remove, run, list, playtime, last-played, help)\n", s)
+	fmt.Printf("[!] Invalid choice: '%v' (choose from add, remove, run, list, playtime, last-played, last-two-weeks, help)\n", s)
 }
 
 func runGamePrompt(reader *bufio.Reader) error {
@@ -222,7 +223,7 @@ file (that means it's not removed), it prints the game name
 and it's last played date, alongside how many days ago it was.
 */
 func listGamesWithLastPlayed(configFileParentDir string, writer io.Writer) error {
-	games, err := getGames(configFileParentDir)
+	gamesInConfigFile, err := getGames(configFileParentDir)
 	if err != nil {
 		return fmt.Errorf("get games failed: %w", err)
 	}
@@ -240,7 +241,7 @@ func listGamesWithLastPlayed(configFileParentDir string, writer io.Writer) error
 		return fmt.Errorf("read log file info failed: %w", err)
 	}
 
-	gamesWithLastPlayedDate := make(map[string]time.Time, len(games))
+	gamesWithLastPlayedDate := make(map[string]time.Time, len(gamesInConfigFile))
 	reDate := regexp.MustCompile(`\[(.*?)\]`)
 	reGameName := regexp.MustCompile(`\'(.*?)\'`)
 	backScanner := NewScanner(logFile, int(logFileInfo.Size()))
@@ -266,7 +267,7 @@ func listGamesWithLastPlayed(configFileParentDir string, writer io.Writer) error
 				continue
 			}
 
-			for _, game := range games {
+			for _, game := range gamesInConfigFile {
 				/* Check if the game extracted from the log file
 				is also on the config file, to prevent deleted
 				games from showing up in the output*/
@@ -348,8 +349,50 @@ func listGamesWithLastPlayed(configFileParentDir string, writer io.Writer) error
 	}
 
 	fmt.Fprintln(tw, gameRows.String())
-
 	tw.Flush()
+	return nil
+}
 
+// Prints table with game names and total time played in the last two weeks.
+func listGamesWithPlaytimeLastTwoWeeks(configFileParentDir string, writer io.Writer) error {
+	games, totalPlaytime, err :=
+		getGamesWithPlaytimeLastTwoWeeks(configFileParentDir)
+	if err != nil {
+		return fmt.Errorf("get games failed: %w", err)
+	}
+
+	if len(games) == 0 {
+		fmt.Fprintln(writer, "No games found in log file.")
+		return nil
+	}
+
+	padding := 4
+	tw := tabwriter.
+		NewWriter(writer, 0, 0, padding, ' ', tabwriter.AlignRight)
+
+	// Table header
+	fmt.Fprintln(tw, "Game Name\tTime Spent Playing Last Two Weeks\t")
+
+	// Table game rows
+	var gameRows strings.Builder
+
+	for gameName, playtime := range games {
+		if _, err := gameRows.WriteString(fmt.
+			Sprintf("%s\t", gameName)); err != nil {
+			return fmt.Errorf("string builder write failed: %w", err)
+		}
+
+		percentOfTotal := (playtime.Hours() / totalPlaytime.Hours()) * 100
+		if _, err := gameRows.WriteString(fmt.
+			Sprintf("%s (%.1f%%)\t\n",
+				playtime,
+				percentOfTotal)); err != nil {
+			return fmt.Errorf("string builder write failed: %w", err)
+		}
+	}
+
+	fmt.Fprint(tw, gameRows.String())
+	tw.Flush()
+	fmt.Fprintf(writer, "\n%s spent playing last two weeks.\n", totalPlaytime)
 	return nil
 }

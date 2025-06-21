@@ -459,6 +459,88 @@ func Test_ListGamesWithLastPlayed_Prints1DayAgo(t *testing.T) {
 	}
 }
 
+func Test_ListGamesWithPlaytimeLastTwoWeeks_HappyPath(t *testing.T) {
+	setupTestsDir(t)
+	configFileParentDir := createTempDirWithConfigFile(t, nil)
+	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
+	pathToTempFile := createTempFileForTests(t)
+
+	for i := 1; i < 4; i++ {
+		err := saveGameToConfig(
+			"Test Game "+strconv.Itoa(i),
+			pathToTempFile,
+			configFileParentDir)
+		if err != nil {
+			t.Errorf("[%d] error saving game to config: %v\n", i, err)
+		}
+	}
+
+	// These dates have to be in the last two weeks.
+	timeNow := time.Now().UTC()
+	time1DayLater := timeNow.AddDate(0, 0, 1)
+
+	logEntry4HoursPlayed := fmt.
+		Sprintf("[%s] Played 'Test Game 1' from 08:00 to 12:00.\n",
+			timeNow.Format(time.DateOnly))
+	logEntry8HoursPlayed := fmt.
+		Sprintf("[%s] Played 'Test Game 2' from 08:00 to 16:00.\n",
+			timeNow.Format(time.DateOnly))
+	logEntry24HoursPlayed := fmt.
+		Sprintf("[%s] Played 'Test Game 3' from 08:00 to %s 08:00.\n",
+			timeNow.Format(time.DateOnly),
+			time1DayLater.Format(time.DateOnly))
+
+	// Not checking for write errors, if this fails the test will fail too.
+	var sb strings.Builder
+	sb.WriteString(logEntry4HoursPlayed)
+	sb.WriteString(logEntry8HoursPlayed)
+	sb.WriteString(logEntry24HoursPlayed)
+
+	err := os.WriteFile(pathToLogFile, []byte(sb.String()), os.ModePerm)
+	if err != nil {
+		t.Errorf("error writing to log file: %v\n", err)
+	}
+
+	var b bytes.Buffer
+	err = listGamesWithPlaytimeLastTwoWeeks(configFileParentDir, &b)
+	if err != nil {
+		t.Errorf("got '%v'; want nil;\n", err)
+	}
+
+	gotOutput := b.String()
+	totalHours := "36h0m0s spent playing last two weeks."
+	if !strings.Contains(gotOutput, totalHours) {
+		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, totalHours)
+	}
+
+	game1 := "Test Game 1"
+	playtime1 := "4h0m0s (11.1%)"
+	if !strings.Contains(gotOutput, game1) {
+		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, game1)
+	}
+	if !strings.Contains(gotOutput, playtime1) {
+		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, playtime1)
+	}
+
+	game2 := "Test Game 2"
+	playtime2 := "8h0m0s (22.2%)"
+	if !strings.Contains(gotOutput, game2) {
+		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, game2)
+	}
+	if !strings.Contains(gotOutput, playtime2) {
+		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, playtime2)
+	}
+
+	game3 := "Test Game 3"
+	playtime3 := "24h0m0s (66.7%)"
+	if !strings.Contains(gotOutput, game3) {
+		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, game3)
+	}
+	if !strings.Contains(gotOutput, playtime3) {
+		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, playtime3)
+	}
+}
+
 // Creates a directory and a file inside it, both are named with name + random numbers.
 func setupAddGamePromptTest(t *testing.T, name string) *os.File {
 	tempDir, err := os.MkdirTemp(testsDir, name)

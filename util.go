@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
+	"strings"
+	"time"
 )
 
 // Returns false if the path is a directory.
@@ -13,6 +16,34 @@ func fileExists(filename string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+// Layouts:
+// Date "2006-01-02" Hour "15:04"
+func getTimeFromStrings(date string, hourStr string) (time.Time, error) {
+	var timeSb strings.Builder
+	if _, err := timeSb.WriteString(date); err != nil {
+		return time.Time{}, fmt.Errorf("string builder write failed: %w",
+			err)
+	}
+	if _, err := timeSb.
+		WriteString(" "); err != nil {
+		return time.Time{}, fmt.Errorf("string builder write failed: %w",
+			err)
+	}
+	if _, err := timeSb.
+		WriteString(hourStr); err != nil {
+		return time.Time{}, fmt.Errorf("string builder write failed: %w",
+			err)
+	}
+
+	layout := "2006-01-02 15:04"
+	t, err := time.ParseInLocation(layout, timeSb.String(), time.UTC)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse date failed: %w", err)
+	}
+
+	return t, nil
 }
 
 // From https://stackoverflow.com/a/46767098
