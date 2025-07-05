@@ -15,19 +15,18 @@ var ErrDoesNotExistOrIsADirectory = errors.New("file does not exist or is a dire
 
 // Prints help information.
 func showHelp() {
-	fmt.Println("cli game launcher 0.0.1")
-	fmt.Println("A minimal game launcher for your terminal")
-	fmt.Println()
-	fmt.Println("USAGE:")
-	fmt.Println("cli-game-launcher [OPTIONS] [COMMAND]...")
-	fmt.Println("OPTIONS:")
-	fmt.Println("	-h, --help 		Print this help information and exit")
-	fmt.Println("COMMANDS:")
-	fmt.Println("	add 			Add a new game")
-	fmt.Println("	remove			Remove a game")
-	fmt.Println("	run			Run a game")
-	fmt.Println("	list			Print all known games")
-	fmt.Println("	help			Print this help information and exit")
+	sb := strings.Builder{}
+	sb.WriteString("cli game launcher 0.0.1\n")
+	sb.WriteString("A minimal game launcher for your terminal\n\n")
+	sb.WriteString("USAGE:\n")
+	sb.WriteString("cli-game-launcher [COMMAND]\n\n")
+	sb.WriteString("COMMANDS:\n")
+	sb.WriteString("\tadd\t\tAdd a new game\n")
+	sb.WriteString("\tremove\t\tRemove a game\n")
+	sb.WriteString("\trun\t\tRun a game\n")
+	sb.WriteString("\tlist\t\tPrint all known games\n")
+	sb.WriteString("\thelp\t\tPrint this help information and exit\n")
+	fmt.Print(sb.String())
 }
 
 func showUsageOnInvalidOption(s string) {
