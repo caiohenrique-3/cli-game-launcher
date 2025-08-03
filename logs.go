@@ -19,19 +19,19 @@ func saveSessionToLogs(gameName string, timeStart time.Time,
 
 	if timeStartDateString != timeEndDateString {
 		// That means the date has changed from when it started.
-		// [2006-01-02] Played 'game' from 15:04 to 2015-07-03 15:32.
+		// [2006-01-02] Played 'game' from 15:04:05 to 2015-07-03 15:32:05.
 		stringToAppend = fmt.Sprintf("[%s] Played '%s' from %s to %s.\n",
 			timeStartDateString,
 			gameName,
-			timeStart.Format("15:04"),
-			timeEnd.Format("2006-01-02 15:04"))
+			timeStart.Format(time.TimeOnly),
+			timeEnd.Format(time.DateTime))
 	} else {
-		// [2006-01-02] Played 'game' from 15:04 to 15:32.
+		// [2006-01-02] Played 'game' from 15:04:05 to 15:32:05.
 		stringToAppend = fmt.Sprintf("[%s] Played '%s' from %s to %s.\n",
 			timeStartDateString,
 			gameName,
-			timeStart.Format("15:04"),
-			timeEnd.Format("15:04"))
+			timeStart.Format(time.TimeOnly),
+			timeEnd.Format(time.TimeOnly))
 	}
 
 	logFile, err := os.OpenFile(pathToLogFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
@@ -71,12 +71,12 @@ func getGamesWithLastPlayedTime(configFileParentDir string) (map[string]time.Tim
 	gamesWithLastPlayedDate := make(map[string]time.Time, len(gamesInConfigFile))
 	regexDate := regexp.MustCompile(`\[(.*?)\]`)
 	regexGameName := regexp.MustCompile(`\'(.*?)\'`)
-	regexTime := regexp.MustCompile(`\d{2}:\d{2}`)
+	regexTime := regexp.MustCompile(`\d{2}:\d{2}:\d{2}`)
 	backScanner := NewScanner(logFile, int(logFileInfo.Size()))
 
 	/* Reading log file line by line, starting by the end to the start,
-	 extracting date and game name.
-	Example: [2025-06-13] Played 'My Game' from 14:26 to 14:27. */
+	extracting date and game name.
+	Example: [2025-06-13] Played 'My Game' from 14:26:30 to 14:27:00. */
 	for {
 		line, _, err := backScanner.Line()
 		if err != nil {
@@ -165,7 +165,7 @@ func getGamesWithPlaytimeLastTwoWeeks(
 	games := make(map[string]time.Duration, len(gamesInConfigFile))
 	regexGameName := regexp.MustCompile(`\'(.*?)\'`)
 	regexDate := regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
-	regexTime := regexp.MustCompile(`\d{2}:\d{2}`)
+	regexTime := regexp.MustCompile(`\d{2}:\d{2}:\d{2}`)
 	backScanner := NewScanner(logFile, int(logFileInfo.Size()))
 	timeTwoWeeksAgo := time.Now().UTC().AddDate(0, 0, -14)
 	var totalPlaytime time.Duration

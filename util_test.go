@@ -31,10 +31,10 @@ func Test_FileExists_ReturnsFalseIfPathIsADirectory(t *testing.T) {
 
 func Test_GetTimeFromStrings_HappyPath(t *testing.T) {
 	dateStr := "2025-09-12"
-	hourStr := "16:49"
+	hourStr := "16:49:30"
 	got, err := getTimeFromStrings(dateStr, hourStr)
 	gotDate := got.Format(time.DateOnly)
-	gotTime := got.Format("15:04")
+	gotTime := got.Format(time.TimeOnly)
 
 	if err != nil {
 		t.Errorf("got '%v'; want nil;\n", err)

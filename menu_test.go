@@ -325,18 +325,18 @@ func Test_ListGamesWithLastPlayed_HappyPath(t *testing.T) {
 	timeToday := time.Now()
 
 	time6DaysAgoString := fmt.
-		Sprintf("[%s] Played '%s' from 12:00 to 12:30.\n",
+		Sprintf("[%s] Played '%s' from 12:24:30 to 12:30:00.\n",
 			time6DaysAgo.Format(time.DateOnly),
 			"Test Game1")
 	timeTodayString := fmt.
-		Sprintf("[%s] Played '%s' from 12:00 to 12:30.\n",
+		Sprintf("[%s] Played '%s' from 12:00:09 to 12:30:59.\n",
 			timeToday.Format(time.DateOnly),
 			"Test Game2")
 	// Removed/hidden because the game name is not in the config file.
 	// For testing to see if the function will include this in the output
 	// (It should not).
 	hiddenGameString := fmt.
-		Sprintf("[%s] Played '%s' from 12:00 to 12:30.\n",
+		Sprintf("[%s] Played '%s' from 12:00:00 to 12:30:00.\n",
 			timeToday.Format(time.DateOnly),
 			"Test Game5")
 
@@ -410,7 +410,7 @@ func Test_ListGamesWithLastPlayed_Prints1DayAgo(t *testing.T) {
 	time1DayAgo := time.Now().AddDate(0, 0, -1)
 
 	time1DayAgoString := fmt.
-		Sprintf("[%s] Played '%s' from 12:00 to 12:30.\n",
+		Sprintf("[%s] Played '%s' from 12:00:00 to 12:30:20.\n",
 			time1DayAgo.Format(time.DateOnly),
 			"Test Game")
 
@@ -453,13 +453,13 @@ func Test_ListGamesWithPlaytimeLastTwoWeeks_HappyPath(t *testing.T) {
 	time1DayLater := timeNow.AddDate(0, 0, 1)
 
 	logEntry4HoursPlayed := fmt.
-		Sprintf("[%s] Played 'Test Game 1' from 08:00 to 12:00.\n",
+		Sprintf("[%s] Played 'Test Game 1' from 08:00:30 to 12:00:59.\n",
 			timeNow.Format(time.DateOnly))
 	logEntry8HoursPlayed := fmt.
-		Sprintf("[%s] Played 'Test Game 2' from 08:00 to 16:00.\n",
+		Sprintf("[%s] Played 'Test Game 2' from 08:00:09 to 16:00:20.\n",
 			timeNow.Format(time.DateOnly))
 	logEntry24HoursPlayed := fmt.
-		Sprintf("[%s] Played 'Test Game 3' from 08:00 to %s 08:00.\n",
+		Sprintf("[%s] Played 'Test Game 3' from 08:00:21 to %s 08:00:34.\n",
 			timeNow.Format(time.DateOnly),
 			time1DayLater.Format(time.DateOnly))
 
@@ -481,13 +481,13 @@ func Test_ListGamesWithPlaytimeLastTwoWeeks_HappyPath(t *testing.T) {
 	}
 
 	gotOutput := b.String()
-	totalHours := "36h0m0s spent playing last two weeks."
+	totalHours := "36h0m53s spent playing last two weeks."
 	if !strings.Contains(gotOutput, totalHours) {
 		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, totalHours)
 	}
 
 	game1 := "Test Game 1"
-	playtime1 := "4h0m0s (11.1%)"
+	playtime1 := "4h0m29s (11.1%)"
 	if !strings.Contains(gotOutput, game1) {
 		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, game1)
 	}
@@ -496,7 +496,7 @@ func Test_ListGamesWithPlaytimeLastTwoWeeks_HappyPath(t *testing.T) {
 	}
 
 	game2 := "Test Game 2"
-	playtime2 := "8h0m0s (22.2%)"
+	playtime2 := "8h0m11s (22.2%)"
 	if !strings.Contains(gotOutput, game2) {
 		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, game2)
 	}
@@ -505,7 +505,7 @@ func Test_ListGamesWithPlaytimeLastTwoWeeks_HappyPath(t *testing.T) {
 	}
 
 	game3 := "Test Game 3"
-	playtime3 := "24h0m0s (66.7%)"
+	playtime3 := "24h0m13s (66.6%)"
 	if !strings.Contains(gotOutput, game3) {
 		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, game3)
 	}

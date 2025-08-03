@@ -19,7 +19,7 @@ func fileExists(filename string) bool {
 }
 
 // Layouts:
-// Date "2006-01-02" Hour "15:04"
+// Date "2006-01-02" Hour "15:04:21"
 func getTimeFromStrings(date string, hourStr string) (time.Time, error) {
 	var timeSb strings.Builder
 	if _, err := timeSb.WriteString(date); err != nil {
@@ -37,8 +37,7 @@ func getTimeFromStrings(date string, hourStr string) (time.Time, error) {
 			err)
 	}
 
-	layout := "2006-01-02 15:04"
-	t, err := time.ParseInLocation(layout, timeSb.String(), time.UTC)
+	t, err := time.ParseInLocation(time.DateTime, timeSb.String(), time.UTC)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("parse date failed: %w", err)
 	}

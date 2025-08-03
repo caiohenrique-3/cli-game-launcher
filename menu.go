@@ -304,18 +304,14 @@ func listGamesWithPlaytimeLastTwoWeeks(configFileParentDir string, writer io.Wri
 	var gameRows strings.Builder
 
 	for gameName, playtime := range games {
-		if _, err := gameRows.WriteString(fmt.
-			Sprintf("%s\t", gameName)); err != nil {
-			return fmt.Errorf("string builder write failed: %w", err)
-		}
+		gameRows.WriteString(fmt.
+			Sprintf("%s\t", gameName))
 
 		percentOfTotal := (playtime.Hours() / totalPlaytime.Hours()) * 100
-		if _, err := gameRows.WriteString(fmt.
+		gameRows.WriteString(fmt.
 			Sprintf("%s (%.1f%%)\t\n",
 				playtime,
-				percentOfTotal)); err != nil {
-			return fmt.Errorf("string builder write failed: %w", err)
-		}
+				percentOfTotal))
 	}
 
 	fmt.Fprint(tw, gameRows.String())

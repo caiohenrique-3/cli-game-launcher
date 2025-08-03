@@ -36,7 +36,8 @@ func Test_SaveSessionToLogs_HappyPath(t *testing.T) {
 
 	wantString := fmt.Sprintf("[%s] Played '%s' from %s to %s.\n",
 		timeStart.Format(time.DateOnly),
-		gameName, timeStart.Format("15:04"), timeEnd.Format("15:04"))
+		gameName, timeStart.Format(time.TimeOnly),
+		timeEnd.Format(time.TimeOnly))
 
 	if string(logFileData) != wantString {
 		t.Errorf("got: '%s'; want: '%s';\n", string(logFileData), wantString)
@@ -72,10 +73,11 @@ func Test_SaveSessionToLogs_AppendsCorrectly(t *testing.T) {
 	timeString := fmt.Sprintf("[%s] Played '%s' from %s to %s.\n",
 		timeStart.Format(time.DateOnly),
 		gameName,
-		timeStart.Format("15:04"),
-		timeEnd.Format("15:04"))
-	// Because we call saveSessionToLogs two times with same input.
+		timeStart.Format(time.TimeOnly),
+		timeEnd.Format(time.TimeOnly))
+
 	var sb strings.Builder
+	// 2x because we call saveSessionToLogs two times with same input.
 	sb.WriteString(timeString)
 	sb.WriteString(timeString)
 	wantString := sb.String()
@@ -112,8 +114,8 @@ func Test_SaveSessionToLogs_DisplaysDateIfEndTimeDayIsDifferent(t *testing.T) {
 	wantString := fmt.Sprintf("[%s] Played '%s' from %s to %s.\n",
 		timeStart.Format(time.DateOnly),
 		gameName,
-		timeStart.Format("15:04"),
-		timeEnd.Format("2006-01-02 15:04"))
+		timeStart.Format(time.TimeOnly),
+		timeEnd.Format(time.DateTime))
 
 	if string(logFileData) != wantString {
 		t.Errorf("got: '%s'; want: '%s';\n", string(logFileData), wantString)
@@ -140,15 +142,15 @@ func Test_GetGamesWithLastPlayedTime_HappyPath(t *testing.T) {
 	timeToday := time.Now().UTC()
 
 	time6DaysAgoString := fmt.
-		Sprintf("[%s] Played '%s' from 06:00 to 06:30.\n",
+		Sprintf("[%s] Played '%s' from 06:00:00 to 06:30:00.\n",
 			time6DaysAgo.Format(time.DateOnly),
 			"Test Game 1")
 	timeTodayString := fmt.
-		Sprintf("[%s] Played '%s' from 12:30 to 14:00.\n",
+		Sprintf("[%s] Played '%s' from 12:30:00 to 14:00:00.\n",
 			timeToday.Format(time.DateOnly),
 			"Test Game 2")
 	removedGameString := fmt.
-		Sprintf("[%s] Played '%s' from 12:00 to 12:30.\n",
+		Sprintf("[%s] Played '%s' from 12:00:00 to 12:30:00.\n",
 			timeToday.Format(time.DateOnly),
 			"Test Game 5")
 
@@ -230,20 +232,20 @@ func Test_GetGamesWithPlaytimeLastTwoWeeks_HappyPath(t *testing.T) {
 	time20DaysAgo := timeNow.AddDate(0, 0, -20)
 
 	logEntry4HoursPlayed := fmt.
-		Sprintf("[%s] Played 'Test Game 1' from 08:00 to 12:00.\n",
+		Sprintf("[%s] Played 'Test Game 1' from 08:00:00 to 12:00:00.\n",
 			timeNow.Format(time.DateOnly))
 	logEntry8HoursPlayed := fmt.
-		Sprintf("[%s] Played 'Test Game 2' from 08:00 to 16:00.\n",
+		Sprintf("[%s] Played 'Test Game 2' from 08:00:00 to 16:00:00.\n",
 			timeNow.Format(time.DateOnly))
 	logEntry24HoursPlayed := fmt.
-		Sprintf("[%s] Played 'Test Game 3' from 08:00 to %s 08:00.\n",
+		Sprintf("[%s] Played 'Test Game 3' from 08:00:00 to %s 08:00:00.\n",
 			timeNow.Format(time.DateOnly),
 			time1DayLater.Format(time.DateOnly))
 	logEntryRemovedGame := fmt.
-		Sprintf("[%s] Played 'Test Game 4' from 17:30 to 19:00.\n",
+		Sprintf("[%s] Played 'Test Game 4' from 17:30:00 to 19:00:00.\n",
 			timeNow.Format(time.DateOnly))
 	logEntryMoreThanTwoWeeksAgo := fmt.
-		Sprintf("[%s] Played 'Test Game 5' from 11:29 to 15:01.\n",
+		Sprintf("[%s] Played 'Test Game 5' from 11:29:00 to 15:01:00.\n",
 			time20DaysAgo.Format(time.DateOnly))
 
 	// Not checking for write errors, if this fails the test will fail too.
