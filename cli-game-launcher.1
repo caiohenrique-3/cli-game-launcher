@@ -1,0 +1,40 @@
+.TH "cli-game-launcher" "1"
+.SH NAME
+.PP
+cli-game-launcher - A minimal game launcher for your terminal
+
+.SH SYNOPSIS
+.PP
+\f[B]cli-game-launcher\f[R] [COMMAND]
+
+.SH DESCRIPTION
+.PP
+cli-game-launcher is a command-line program that just runs your game executables, and does not do anything else. Tailored for people that just need a centralized way to launch both native games and games that run with Wine (via shell scripts).
+
+.SH COMMANDS
+.SS add
+.TP
+Add a new game.
+
+.SS remove
+.TP
+Remove a game.
+
+.SS run
+.TP
+Run a game.
+
+.SS list
+.TP
+Print list of known games.
+
+.SS help
+.TP
+Print help information and exit.
+
+.SH FILES
+\f[B]$XDG_CONFIG_HOME/cli-game-launcher/config.json\f[R] (Linux)
+.PP
+\f[B]/Users/user/Library/Application Support/cli-game-launcher/config.json\f[R] (macOS)
+.PP
+\f[B]%AppData%/cli-game-launcher/config.json\f[R] (Windows)
