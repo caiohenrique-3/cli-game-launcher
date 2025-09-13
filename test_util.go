@@ -45,14 +45,15 @@ func createTempDirWithConfigFile(t *testing.T, configFileData []byte) string {
 	if err != nil {
 		t.Errorf("error creating temp dir: %v\n", err)
 	}
+
 	err = createEmptyConfigFileAt(tempDir)
 	if err != nil {
 		t.Errorf("error creating config file at temp dir: %v\n", err)
 	}
 
 	if configFileData != nil {
-		f := filepath.Join(tempDir, "config.json")
-		err := os.WriteFile(f, configFileData, os.ModePerm)
+		pathToConfigFile := filepath.Join(tempDir, "config.json")
+		err := os.WriteFile(pathToConfigFile, configFileData, os.ModePerm)
 		if err != nil {
 			t.Errorf("error writing data to file: %v\n", err)
 		}
