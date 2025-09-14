@@ -13,6 +13,7 @@ type Game struct {
 	Name             string `json:"name"`
 	PathToExecutable string `json:"pathToExecutable"`
 	TimeSpentPlaying string `json:"timeSpentPlaying"`
+	IsHidden         bool   `json:"isHidden"`
 }
 
 var ErrInvalidOption = errors.New("invalid option")
@@ -151,7 +152,7 @@ func loadConfigFile(configFileParentDir string) ([]byte, error) {
 }
 
 // Scans a config file for games and returns them in the form of a slice.
-func getGames(configFileParentDir string) ([]Game, error) {
+func getGames(configFileParentDir string, excludeHiddenGames bool) ([]Game, error) {
 	data, err := loadConfigFile(configFileParentDir)
 	if err != nil {
 		return nil, fmt.Errorf("load config file failed: %w", err)
@@ -161,6 +162,18 @@ func getGames(configFileParentDir string) ([]Game, error) {
 	err = json.Unmarshal(data, &games)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
+	}
+
+	if excludeHiddenGames {
+		newGames := make([]Game, len(games))
+
+		for _, game := range games {
+			if game.IsHidden {
+				continue
+			}
+			newGames = append(newGames, game)
+		}
+		return newGames, nil
 	}
 
 	return games, nil
@@ -193,6 +206,33 @@ func saveTimeSpentPlayingToConfig(games []Game, gameIndexToUpdate int,
 	err = os.WriteFile(pathToConfigFile, newConfigFileData, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("write to config file failed: %w", err)
+	}
+
+	return nil
+}
+
+func toggleHiddenGame(indexOfChosenGame int, pathToConfigFile string) error {
+	configFileParentDir := filepath.Dir(pathToConfigFile)
+	excludeHiddenGames := false
+	games, err := getGames(configFileParentDir, excludeHiddenGames)
+	if err != nil {
+		return fmt.Errorf("get games failed: %w", err)
+	}
+
+	if games[indexOfChosenGame].IsHidden {
+		games[indexOfChosenGame].IsHidden = false
+	} else {
+		games[indexOfChosenGame].IsHidden = true
+	}
+
+	newConfigFileData, err := json.MarshalIndent(games, "", "    ")
+	if err != nil {
+		return fmt.Errorf("marshal failed: %w", err)
+	}
+
+	err = os.WriteFile(pathToConfigFile, newConfigFileData, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("write file failed: %w", err)
 	}
 
 	return nil

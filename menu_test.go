@@ -154,7 +154,7 @@ func Test_ListGamesNumbered_HappyPath(t *testing.T) {
 	}
 
 	var b bytes.Buffer
-	err = listGamesNumbered(configFileParentDir, &b)
+	err = listGamesNumbered(configFileParentDir, &b, ListCmdOptions{})
 	if err != nil {
 		t.Errorf("got: '%v'; want nil;\n", err)
 	}
@@ -173,7 +173,7 @@ func Test_ListGamesNumbered_ConfigFileNotFound(t *testing.T) {
 		t.Errorf("error creating temp dir: %v\n", err)
 	}
 
-	err = listGamesNumbered(pathToEmptyDir, nil)
+	err = listGamesNumbered(pathToEmptyDir, nil, ListCmdOptions{})
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("got: '%v'; want '%v';\n", err, fs.ErrNotExist)
 	}
@@ -183,9 +183,114 @@ func Test_ListGamesNumbered_NoGamesFound(t *testing.T) {
 	setupTestsDir(t)
 	configFileParentDir := createTempDirWithConfigFile(t, nil)
 
-	err := listGamesNumbered(configFileParentDir, nil)
+	err := listGamesNumbered(configFileParentDir, nil, ListCmdOptions{})
 	if !errors.Is(err, ErrNoGamesFound) {
 		t.Errorf("got: '%v'; want '%v';\n", err, ErrNoGamesFound)
+	}
+}
+
+func Test_ListGamesNumbered_DoesNotShowAHiddenGame(t *testing.T) {
+	setupTestsDir(t)
+	configFileParentDir := createTempDirWithConfigFile(t, nil)
+	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
+
+	games := []Game{
+		{IsHidden: true, Name: "Test Game"},
+	}
+
+	configFileData, err := json.Marshal(games)
+	if err != nil {
+		t.Fatalf("marshal failed: '%v'\n", err)
+	}
+
+	err = os.WriteFile(pathToConfigFile, configFileData, os.ModePerm)
+	if err != nil {
+		t.Fatalf("write file failed: '%v'\n", err)
+	}
+
+	var b bytes.Buffer
+	cmdOptions := &ListCmdOptions{showHidden: false}
+	err = listGamesNumbered(configFileParentDir, &b, *cmdOptions)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil;\n", err)
+	}
+
+	capturedOutput := b.Bytes()
+	wantOutput := []byte("")
+	if !bytes.Equal(capturedOutput, wantOutput) {
+		t.Fatalf("got: '%s'; want '%s';\n", capturedOutput, wantOutput)
+	}
+}
+
+func Test_ListGamesNumbered_OnlyShowsHiddenGames(t *testing.T) {
+	setupTestsDir(t)
+	configFileParentDir := createTempDirWithConfigFile(t, nil)
+	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
+
+	games := []Game{
+		{IsHidden: true, Name: "Test Game 1"},
+		{IsHidden: true, Name: "Test Game 2"},
+		{IsHidden: false, Name: "Test Game 3"},
+		{IsHidden: false, Name: "Test Game 4"},
+	}
+
+	configFileData, err := json.Marshal(games)
+	if err != nil {
+		t.Fatalf("marshal failed: '%v'\n", err)
+	}
+
+	err = os.WriteFile(pathToConfigFile, configFileData, os.ModePerm)
+	if err != nil {
+		t.Fatalf("write file failed: '%v'\n", err)
+	}
+
+	var b bytes.Buffer
+	cmdOptions := &ListCmdOptions{onlyShowHidden: true}
+	err = listGamesNumbered(configFileParentDir, &b, *cmdOptions)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil;\n", err)
+	}
+
+	capturedOutput := b.Bytes()
+	wantOutput := []byte("[0] Test Game 1\n[1] Test Game 2\n")
+	if !bytes.Equal(capturedOutput, wantOutput) {
+		t.Fatalf("got: '%s'; want '%s';\n", capturedOutput, wantOutput)
+	}
+}
+
+func Test_ListGamesNumbered_ShowsHiddenGameIndicators(t *testing.T) {
+	setupTestsDir(t)
+	configFileParentDir := createTempDirWithConfigFile(t, nil)
+	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
+
+	games := []Game{
+		{IsHidden: true, Name: "Test Game 1"},
+		{IsHidden: true, Name: "Test Game 2"},
+		{IsHidden: false, Name: "Test Game 3"},
+		{IsHidden: false, Name: "Test Game 4"},
+	}
+
+	configFileData, err := json.Marshal(games)
+	if err != nil {
+		t.Fatalf("marshal failed: '%v'\n", err)
+	}
+
+	err = os.WriteFile(pathToConfigFile, configFileData, os.ModePerm)
+	if err != nil {
+		t.Fatalf("write file failed: '%v'\n", err)
+	}
+
+	var b bytes.Buffer
+	cmdOptions := &ListCmdOptions{showHidden: true, hiddenGameIndicator: true}
+	err = listGamesNumbered(configFileParentDir, &b, *cmdOptions)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil;\n", err)
+	}
+
+	capturedOutput := b.Bytes()
+	wantOutput := []byte("[0] Test Game 1 [HIDDEN]\n[1] Test Game 2 [HIDDEN]\n[2] Test Game 3\n[3] Test Game 4\n")
+	if !bytes.Equal(capturedOutput, wantOutput) {
+		t.Fatalf("got: '%s'; want '%s';\n", capturedOutput, wantOutput)
 	}
 }
 

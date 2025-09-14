@@ -17,11 +17,16 @@ var ErrDoesNotExistOrIsADirectory = errors.New("file does not exist or is a dire
 
 // Prints help information.
 func showHelp() {
-	sb := strings.Builder{}
-	sb.WriteString("cli game launcher 0.0.1\n")
+	var sb strings.Builder
+	sb.WriteString("cli game launcher\n")
 	sb.WriteString("A minimal game launcher for your terminal\n\n")
 	sb.WriteString("USAGE:\n")
-	sb.WriteString("cli-game-launcher [COMMAND]\n\n")
+	sb.WriteString("cli-game-launcher [COMMAND] [OPTIONS]\n\n")
+	sb.WriteString("list OPTIONS:\n")
+	sb.WriteString("\t-show-hidden, --show-hidden=<BOOL>\tShow hidden games in output (default: false)\n")
+	sb.WriteString("\t-only-hidden, --only-hidden=<BOOL>\tOnly show hidden games in output  (default: false)\n\n")
+	sb.WriteString("run OPTIONS:\n")
+	sb.WriteString("\t-show-hidden, --show-hidden=<BOOL>\tShow hidden games in output (default: false)\n\n")
 	sb.WriteString("COMMANDS:\n")
 	sb.WriteString("\tadd\t\tAdd a new game\n")
 	sb.WriteString("\tremove\t\tRemove a game\n")
@@ -30,17 +35,15 @@ func showHelp() {
 	sb.WriteString("\tplaytime\tShow playtime for each game\n")
 	sb.WriteString("\tlast-played\tView last played dates\n")
 	sb.WriteString("\tlast-two-weeks\tShow playtime for last two weeks\n")
+	sb.WriteString("\thide\t\tToggle the visibility of a game\n")
 	sb.WriteString("\thelp\t\tPrint this help information and exit\n")
+
 	fmt.Print(sb.String())
 }
 
-func showUsageOnInvalidOption(s string) {
-	fmt.Println("Usage: cli-game-launcher <command>")
-	fmt.Printf("[!] Invalid choice: '%v' (choose from add, remove, run, list, playtime, last-played, last-two-weeks, help)\n", s)
-}
-
-func runGamePrompt(reader *bufio.Reader) error {
-	err := listGamesNumbered(programHome, os.Stdout)
+func runGamePrompt(reader *bufio.Reader, cmdOptions RunCmdOptions) error {
+	listCmdOptions := ListCmdOptions{showHidden: cmdOptions.showHidden}
+	err := listGamesNumbered(programHome, os.Stdout, listCmdOptions)
 	if err != nil {
 		return fmt.Errorf("list games failed: %w", err)
 	}
@@ -50,7 +53,14 @@ func runGamePrompt(reader *bufio.Reader) error {
 		return fmt.Errorf("get user input failed: %w", err)
 	}
 
-	games, err := getGames(programHome)
+	var excludeHiddenGames bool
+	if cmdOptions.showHidden {
+		excludeHiddenGames = false
+	} else {
+		excludeHiddenGames = true
+	}
+
+	games, err := getGames(programHome, excludeHiddenGames)
 	if err != nil {
 		return fmt.Errorf("get games failed: %w", err)
 	}
@@ -119,13 +129,13 @@ func addGamePrompt(reader *bufio.Reader) error {
 	}
 
 	fmt.Printf("'%s' added.\n", gameName)
-
 	return nil
 }
 
 // Shows the list of game entries in the config file and removes the user chosen option.
 func removeGamePrompt(reader *bufio.Reader) error {
-	err := listGamesNumbered(programHome, os.Stdout)
+	cmdOptions := &ListCmdOptions{showHidden: true}
+	err := listGamesNumbered(programHome, os.Stdout, *cmdOptions)
 	if err != nil {
 		return fmt.Errorf("list games failed: %w", err)
 	}
@@ -143,10 +153,34 @@ func removeGamePrompt(reader *bufio.Reader) error {
 	return nil
 }
 
+// Shows the list of games in the config file and
+// hides or unhides the user chosen option.
+func hideGamePrompt(reader *bufio.Reader) error {
+	cmdOptions := &ListCmdOptions{showHidden: true, hiddenGameIndicator: true}
+	err := listGamesNumbered(programHome, os.Stdout, *cmdOptions)
+	if err != nil {
+		return fmt.Errorf("list games failed: %w", err)
+	}
+
+	userInput, err := getIntFromUser(reader)
+	if err != nil {
+		return fmt.Errorf("get user input failed: %w", err)
+	}
+
+	pathToConfigFile := filepath.Join(programHome, "config.json")
+	err = toggleHiddenGame(userInput, pathToConfigFile)
+	if err != nil {
+		return fmt.Errorf("hide game failed: %w", err)
+	}
+
+	return nil
+}
+
 // Looks for a file named config.json in the parentDir path and prints
 // the index and the game name of the entries in the file.
-func listGamesNumbered(parentDir string, writer io.Writer) error {
-	games, err := getGames(parentDir)
+func listGamesNumbered(parentDir string, writer io.Writer,
+	cmdOptions ListCmdOptions) error {
+	games, err := getGames(parentDir, false)
 	if err != nil {
 		return fmt.Errorf("get games failed: %w", err)
 	}
@@ -155,12 +189,39 @@ func listGamesNumbered(parentDir string, writer io.Writer) error {
 		return ErrNoGamesFound
 	}
 
-	var s string
-	for i, game := range games {
-		s = s + fmt.Sprintf("[%v] %v\n", i, game.Name)
+	var sb strings.Builder
+
+	if cmdOptions.onlyShowHidden {
+		index := 0
+		for _, game := range games {
+			if game.IsHidden {
+				fmt.Fprintf(&sb, "[%d] %s\n",
+					index, game.Name)
+				index++
+			}
+		}
+	} else {
+		if cmdOptions.showHidden {
+			for i, game := range games {
+				if game.IsHidden && cmdOptions.hiddenGameIndicator {
+					fmt.Fprintf(&sb, "[%d] %s [HIDDEN]\n", i, game.Name)
+				} else {
+					fmt.Fprintf(&sb, "[%d] %s\n", i, game.Name)
+				}
+			}
+		} else {
+			index := 0
+			for _, game := range games {
+				if !game.IsHidden {
+					fmt.Fprintf(&sb, "[%d] %s\n",
+						index, game.Name)
+					index++
+				}
+			}
+		}
 	}
 
-	fmt.Fprint(writer, s)
+	fmt.Fprint(writer, sb.String())
 	return nil
 }
 
@@ -182,7 +243,7 @@ func getIntFromUser(reader *bufio.Reader) (int, error) {
 
 // Prints a table with games and the time spent playing them.
 func listGamesWithPlaytime(configFileParentDir string, writer io.Writer) error {
-	games, err := getGames(configFileParentDir)
+	games, err := getGames(configFileParentDir, false)
 	if err != nil {
 		return fmt.Errorf("get games failed: %w", err)
 	}

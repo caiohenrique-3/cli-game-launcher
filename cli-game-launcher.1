@@ -5,7 +5,7 @@ cli-game-launcher - A minimal game launcher for your terminal
 
 .SH SYNOPSIS
 .PP
-\f[B]cli-game-launcher\f[R] [COMMAND]
+\f[B]cli-game-launcher\f[R] [COMMAND] [OPTIONS]
 
 .SH DESCRIPTION
 .PP
@@ -28,6 +28,10 @@ Run a game.
 .TP
 Print list of known games.
 
+.SS hide
+.TP
+Toggle the visibility of a game.
+
 .SS playtime
 .TP
 Show total playtime for each game.
@@ -43,6 +47,25 @@ Show total playtime in the last two weeks for each game.
 .SS help
 .TP
 Print help information and exit.
+
+.SH OPTIONS
+.SS General Options:
+.TP
+-h, -help, --help
+Print help text and exit.
+
+.SS Game List Options:
+.TP
+-show-hidden=\f[I]BOOLEAN\f[R], --show-hidden=\f[I]BOOLEAN\f[R]
+Show hidden games in the output. Either \fBtrue\fR or \fBfalse (default)\fR.
+.TP
+-only-hidden=\f[I]BOOLEAN\f[R], --only-hidden=\f[I]BOOLEAN\f[R]
+Only show hidden games in the output. Either \fBtrue\fR or \fBfalse (default)\fR.
+
+.SS Run Game Options:
+.TP
+-show-hidden=\f[I]BOOLEAN\f[R], --show-hidden=\f[I]BOOLEAN\f[R]
+Show hidden games in the output. Either \fBtrue\fR or \fBfalse (default)\fR.
 
 .SH FILES
 \f[B]$XDG_CONFIG_HOME/cli-game-launcher/config.json\f[R] (Linux)

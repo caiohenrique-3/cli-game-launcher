@@ -50,7 +50,7 @@ func saveSessionToLogs(gameName string, timeStart time.Time,
 
 // Returns a map of games with their last played times.
 func getGamesWithLastPlayedTime(configFileParentDir string) (map[string]time.Time, error) {
-	gamesInConfigFile, err := getGames(configFileParentDir)
+	gamesInConfigFile, err := getGames(configFileParentDir, false)
 	if err != nil {
 		return nil, fmt.Errorf("get games failed: %w", err)
 	}
@@ -134,7 +134,7 @@ func getGamesWithLastPlayedTime(configFileParentDir string) (map[string]time.Tim
 // total playtime across all games in the last two weeks.
 func getGamesWithPlaytimeLastTwoWeeks(
 	configFileParentDir string) (map[string]time.Duration, time.Duration, error) {
-	gamesInConfigFile, err := getGames(configFileParentDir)
+	gamesInConfigFile, err := getGames(configFileParentDir, false)
 	if err != nil {
 		return nil, 0, fmt.Errorf("get games failed: %w", err)
 	}

@@ -310,7 +310,7 @@ func Test_GetGames_HappyPath(t *testing.T) {
 
 	goodConfigFileDir := createTempDirWithConfigFile(t, goodEndingData)
 
-	games, err := getGames(goodConfigFileDir)
+	games, err := getGames(goodConfigFileDir, false)
 	if !reflect.DeepEqual(games, goodEndingGames) {
 		t.Errorf("got '%v'; want '%v';\n", games, goodEndingGames)
 	}
@@ -318,7 +318,7 @@ func Test_GetGames_HappyPath(t *testing.T) {
 
 func Test_GetGames_InvalidConfigFile(t *testing.T) {
 	configFileParentDir := createTempDirWithConfigFile(t, []byte("some data"))
-	games, err := getGames(configFileParentDir)
+	games, err := getGames(configFileParentDir, false)
 
 	var wantErr *json.SyntaxError
 	if !errors.As(err, &wantErr) {
@@ -360,5 +360,86 @@ func Test_SaveTimeSpentPlayingToConfig_HappyPath(t *testing.T) {
 	gotTimeSpentPlaying := newGames[0].TimeSpentPlaying
 	if gotTimeSpentPlaying != timeSpentPlaying.String() {
 		t.Errorf("got: '%s'; want '%s';\n", gotTimeSpentPlaying, timeSpentPlaying)
+	}
+}
+
+func Test_GetGames_ExcludesHiddenGames(t *testing.T) {
+	setupTestsDir(t)
+
+	games := []Game{
+		{Name: "Test Game 1"},
+		{Name: "Test Game 2", IsHidden: true}}
+
+	configFileData, err := json.Marshal(games)
+	if err != nil {
+		t.Fatalf("marshal failed: '%v'\n", err)
+	}
+
+	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
+
+	excludeHiddenGames := true
+	gotGames, err := getGames(configFileParentDir, excludeHiddenGames)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil;\n", err)
+	}
+
+	for _, g := range gotGames {
+		if g.IsHidden {
+			t.Fatalf("got: '%v'; must NOT contain hidden games.\n",
+				g)
+		}
+
+		if g.Name == "Test Game 2" {
+			t.Fatalf("must NOT contain 'Test Game 2'.\n")
+		}
+	}
+}
+
+func Test_ToggleHiddenGame_HappyPath(t *testing.T) {
+	setupTestsDir(t)
+
+	games := []Game{{Name: "Test Game 1", IsHidden: false}}
+	configFileData, err := json.Marshal(games)
+	if err != nil {
+		t.Fatalf("marshal failed: '%v'\n", err)
+	}
+
+	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
+	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
+	userInput := 0
+
+	err = toggleHiddenGame(userInput, pathToConfigFile)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil\n", err)
+	}
+
+	gotGames, err := getGames(configFileParentDir, false)
+	if err != nil {
+		t.Fatalf("get games failed: '%v'\n", err)
+	}
+
+	for _, game := range gotGames {
+		if !game.IsHidden {
+			t.Errorf("got: '%t'; want: '%t';\n",
+				game.IsHidden, true)
+		}
+	}
+
+	err = toggleHiddenGame(userInput, pathToConfigFile)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil\n", err)
+	}
+
+	// Config file changed with toggleHiddenGame call, getting games again
+	gotGames, err = getGames(configFileParentDir, false)
+	if err != nil {
+		t.Fatalf("get games failed: '%v'\n", err)
+	}
+
+	for _, game := range gotGames {
+		if game.IsHidden {
+			t.Errorf("got: '%t'; want: '%t';\n",
+				game.IsHidden, false)
+		}
 	}
 }
