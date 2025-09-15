@@ -165,7 +165,7 @@ func getGames(configFileParentDir string, excludeHiddenGames bool) ([]Game, erro
 	}
 
 	if excludeHiddenGames {
-		newGames := make([]Game, len(games))
+		newGames := make([]Game, 0, len(games))
 
 		for _, game := range games {
 			if game.IsHidden {
