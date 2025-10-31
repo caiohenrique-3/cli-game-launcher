@@ -70,7 +70,7 @@ func runGamePrompt(reader *bufio.Reader, cmdOptions RunCmdOptions) error {
 	timeSpentPlaying, err :=
 		runNative(games[userInput].PathToExecutable, reader, os.Stdout)
 	if err != nil {
-		return fmt.Errorf("run %v failed: %w", userInput, err)
+		fmt.Printf("run %v failed: %v", userInput, err)
 	}
 
 	// Saving playtime
@@ -134,7 +134,7 @@ func addGamePrompt(reader *bufio.Reader) error {
 
 // Shows the list of game entries in the config file and removes the user chosen option.
 func removeGamePrompt(reader *bufio.Reader) error {
-	cmdOptions := &ListCmdOptions{showHidden: true}
+	cmdOptions := &ListCmdOptions{showHidden: true, hiddenGameIndicator: true}
 	err := listGamesNumbered(programHome, os.Stdout, *cmdOptions)
 	if err != nil {
 		return fmt.Errorf("list games failed: %w", err)

@@ -17,10 +17,10 @@ func runNative(command string, reader *bufio.Reader, writer io.Writer) (time.Dur
 
 	timeStart := time.Now()
 	err := cmd.Run()
-	if err != nil {
-		return time.Duration(0), fmt.Errorf("command failed: %w", err)
-	}
 	timeSpentPlaying := time.Since(timeStart)
+	if err != nil {
+		return timeSpentPlaying, fmt.Errorf("command failed: %w", err)
+	}
 
 	return timeSpentPlaying, nil
 }

@@ -329,37 +329,28 @@ func Test_GetGames_InvalidConfigFile(t *testing.T) {
 	}
 }
 
-func Test_SaveTimeSpentPlayingToConfig_HappyPath(t *testing.T) {
+func Test_GetGames_ExcludeHiddenGamesGivesValidLength(t *testing.T) {
 	setupTestsDir(t)
-	games := []Game{{
-		Name:             "TestGame",
-		PathToExecutable: "",
-		TimeSpentPlaying: "0h0m0s"}}
+
+	games := []Game{
+		{Name: "Test Game 1"},
+		{Name: "Test Game 2"},
+		{Name: "Test Game 3"},
+		{Name: "Test Game 4"},
+		{Name: "Test Game 5", IsHidden: true},
+		{Name: "Test Game 6", IsHidden: true},
+	}
+
 	configFileData, err := json.Marshal(games)
 	if err != nil {
-		t.Errorf("error marshaling games: %v\n", err)
+		t.Fatalf("error during marshal: %v\n", err)
 	}
 
-	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
-	timeSpentPlaying := time.Duration(2) * time.Hour
-	userInput := 0
+	goodConfigFileDir := createTempDirWithConfigFile(t, configFileData)
 
-	err = saveTimeSpentPlayingToConfig(games, userInput, timeSpentPlaying, pathToConfigFile)
-	if err != nil {
-		t.Errorf("got: '%v'; want nil;\n", err)
-	}
-
-	newConfigFileData, err := loadConfigFile(configFileParentDir)
-	var newGames []Game
-	err = json.Unmarshal(newConfigFileData, &newGames)
-	if err != nil {
-		t.Errorf("error unmarshaling new config file: %v\n", err)
-	}
-
-	gotTimeSpentPlaying := newGames[0].TimeSpentPlaying
-	if gotTimeSpentPlaying != timeSpentPlaying.String() {
-		t.Errorf("got: '%s'; want '%s';\n", gotTimeSpentPlaying, timeSpentPlaying)
+	gotGames, err := getGames(goodConfigFileDir, true)
+	if len(gotGames) != 4 {
+		t.Fatalf("got '%d'; want '%d';\n", len(gotGames), 4)
 	}
 }
 
@@ -392,6 +383,44 @@ func Test_GetGames_ExcludesHiddenGames(t *testing.T) {
 		if g.Name == "Test Game 2" {
 			t.Fatalf("must NOT contain 'Test Game 2'.\n")
 		}
+	}
+
+	if len(gotGames) != 1 {
+		t.Fatalf("got '%d'; want '%d';\n", len(gotGames), 1)
+	}
+}
+
+func Test_SaveTimeSpentPlayingToConfig_HappyPath(t *testing.T) {
+	setupTestsDir(t)
+	games := []Game{{
+		Name:             "TestGame",
+		PathToExecutable: "",
+		TimeSpentPlaying: "0h0m0s"}}
+	configFileData, err := json.Marshal(games)
+	if err != nil {
+		t.Errorf("error marshaling games: %v\n", err)
+	}
+
+	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
+	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
+	timeSpentPlaying := time.Duration(2) * time.Hour
+	userInput := 0
+
+	err = saveTimeSpentPlayingToConfig(games, userInput, timeSpentPlaying, pathToConfigFile)
+	if err != nil {
+		t.Errorf("got: '%v'; want nil;\n", err)
+	}
+
+	newConfigFileData, err := loadConfigFile(configFileParentDir)
+	var newGames []Game
+	err = json.Unmarshal(newConfigFileData, &newGames)
+	if err != nil {
+		t.Errorf("error unmarshaling new config file: %v\n", err)
+	}
+
+	gotTimeSpentPlaying := newGames[0].TimeSpentPlaying
+	if gotTimeSpentPlaying != timeSpentPlaying.String() {
+		t.Errorf("got: '%s'; want '%s';\n", gotTimeSpentPlaying, timeSpentPlaying)
 	}
 }
 
