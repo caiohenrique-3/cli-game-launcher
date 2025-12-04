@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -15,9 +16,9 @@ func Test_RunNative_HappyPath(t *testing.T) {
 		fmt.Println("GNU/Linux and Bash is required for this test. Skipping.")
 		return
 	}
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToBashScript := createTempFileForTests(t)
+
+	configFileParentDir := t.TempDir()
+	pathToBashScript := filepath.Join(configFileParentDir, "script.bash")
 	bashScriptString := "#!/bin/bash\n" +
 		"echo \"Hello from test!\"\n" +
 		"read -p \"Please enter some text: \" user_input\n" +
@@ -26,31 +27,30 @@ func Test_RunNative_HappyPath(t *testing.T) {
 
 	err := os.WriteFile(pathToBashScript, bashScriptData, os.ModePerm)
 	if err != nil {
-		t.Errorf("error writing to bash script: %v\n", err)
+		t.Fatalf("write file failed: '%v'\n", err)
 	}
 
 	err = os.Chmod(pathToBashScript, 0700)
 	if err != nil {
-		t.Errorf("error changing permissions of bash script: %v\n", err)
+		t.Fatalf("chmod failed: '%v'\n", err)
 	}
 
 	// The bash script is the executable of the added game
 	err = saveGameToConfig("Test Game", pathToBashScript, configFileParentDir)
 	if err != nil {
-		t.Errorf("error saving game to config: %v\n", err)
+		t.Fatalf("save game failed: '%v'\n", err)
 	}
 
 	var writer bytes.Buffer
-	reader := bufio.NewReader(strings.NewReader("Test data\n"))
-	_, err = runNative(pathToBashScript, reader, &writer)
+	userInput := bufio.NewReader(strings.NewReader("Test user input\n"))
+	_, err = runNative(pathToBashScript, userInput, &writer)
 	if err != nil {
-		t.Errorf("got: '%v'; want nil;\n", err)
+		t.Fatalf("got: '%v'; want nil;\n", err)
 	}
 
 	capturedOutput := writer.String()
-	wantOutputString := "Hello from test!\n" +
-		"You entered: 'Test data'\n"
+	wantOutputString := "Hello from test!\nYou entered: 'Test user input'\n"
 	if capturedOutput != wantOutputString {
-		t.Errorf("got: \n%s\nwant: \n%s\n", capturedOutput, wantOutputString)
+		t.Fatalf("got: \n%s\nwant: \n%s\n", capturedOutput, wantOutputString)
 	}
 }

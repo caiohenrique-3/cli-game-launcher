@@ -8,9 +8,8 @@ import (
 )
 
 type ListCmdOptions struct {
-	showHidden          bool
-	onlyShowHidden      bool
-	hiddenGameIndicator bool // Shows [HIDDEN] besides the name of the game
+	showHidden     bool
+	onlyShowHidden bool
 }
 
 type RunCmdOptions struct {
@@ -27,7 +26,7 @@ func handleCommandLine() error {
 
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
 	listShowsHiddenGames := listCmd.Bool("show-hidden", false, "Show hidden games in output")
-	listOnlyShowsHiddenGames := listCmd.Bool("only-hidden", false, "Only show hidden games in output")
+	// listOnlyShowsHiddenGames := listCmd.Bool("only-hidden", false, "Only show hidden games in output")
 
 	runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 	runShowsHiddenGames := runCmd.Bool("show-hidden", false, "Show hidden games in output")
@@ -53,11 +52,22 @@ func handleCommandLine() error {
 		}
 
 		cmdOptions := &ListCmdOptions{
-			showHidden:     *listShowsHiddenGames,
-			onlyShowHidden: *listOnlyShowsHiddenGames,
+			showHidden: *listShowsHiddenGames,
 		}
 
-		err = listGamesNumbered(programHome, os.Stdout, *cmdOptions)
+		var excludeHiddenGames bool
+		if cmdOptions.showHidden {
+			excludeHiddenGames = false
+		} else {
+			excludeHiddenGames = true
+		}
+
+		games, err := getGames(programHome, excludeHiddenGames)
+		if err != nil {
+			return err
+		}
+
+		err = listGamesNumbered(games, os.Stdout)
 		if err != nil {
 			return err
 		}

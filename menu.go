@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	"errors"
+	"database/sql"
 	"fmt"
 	"io"
 	"os"
@@ -12,8 +12,6 @@ import (
 	"text/tabwriter"
 	"time"
 )
-
-var ErrDoesNotExistOrIsADirectory = errors.New("file does not exist or is a directory.")
 
 // Prints help information.
 func showHelp() {
@@ -41,18 +39,8 @@ func showHelp() {
 	fmt.Print(sb.String())
 }
 
+// Asks for a game in the database and runs it.
 func runGamePrompt(reader *bufio.Reader, cmdOptions RunCmdOptions) error {
-	listCmdOptions := ListCmdOptions{showHidden: cmdOptions.showHidden}
-	err := listGamesNumbered(programHome, os.Stdout, listCmdOptions)
-	if err != nil {
-		return fmt.Errorf("list games failed: %w", err)
-	}
-
-	userInput, err := getIntFromUser(reader)
-	if err != nil {
-		return fmt.Errorf("get user input failed: %w", err)
-	}
-
 	var excludeHiddenGames bool
 	if cmdOptions.showHidden {
 		excludeHiddenGames = false
@@ -65,26 +53,34 @@ func runGamePrompt(reader *bufio.Reader, cmdOptions RunCmdOptions) error {
 		return fmt.Errorf("get games failed: %w", err)
 	}
 
+	err = listGamesNumbered(games, os.Stdout)
+	if err != nil {
+		return fmt.Errorf("list games failed: %w", err)
+	}
+
+	userInput, err := getIntFromUser(reader)
+	if err != nil {
+		return fmt.Errorf("get user input failed: %w", err)
+	}
+
 	// Running game
-	timeStart := time.Now() // This is needed for saving to logs later.
-	timeSpentPlaying, err :=
-		runNative(games[userInput].PathToExecutable, reader, os.Stdout)
+	timeStart := time.Now()
+	timeSpentPlaying, err := runNative(games[userInput].Path,
+		reader, os.Stdout)
 	if err != nil {
 		fmt.Printf("run %v failed: %v", userInput, err)
 	}
 
 	// Saving playtime
-	pathToConfigFile := filepath.Join(programHome, "config.json")
-	err = saveTimeSpentPlayingToConfig(games, userInput,
-		timeSpentPlaying, pathToConfigFile)
+	pathToDb := filepath.Join(programHome, "data.db")
+	err = saveTimeSpentPlaying(games[userInput].Id, timeSpentPlaying, pathToDb)
 	if err != nil {
 		return fmt.Errorf("save time spent playing failed: %w", err)
 	}
 
 	// Saving gaming session to logs
-	pathToLogFile := filepath.Join(programHome, "logs.json")
 	timeEnd := timeStart.Add(timeSpentPlaying)
-	err = saveSessionToLogs(games[userInput].Name, timeStart, timeEnd, pathToLogFile)
+	err = saveSession(games[userInput].Id, timeStart, timeEnd, pathToDb)
 	if err != nil {
 		return fmt.Errorf("log session failed: %w", err)
 	}
@@ -92,9 +88,7 @@ func runGamePrompt(reader *bufio.Reader, cmdOptions RunCmdOptions) error {
 	return nil
 }
 
-// Asks the user for the path to a game's executable
-// file and its name and saves this info in
-// a configuration file.
+// Asks a game name and path and adds it to the config file.
 func addGamePrompt(reader *bufio.Reader) error {
 	fmt.Print("Enter game name: ")
 	gameName, err := reader.ReadString('\n')
@@ -119,10 +113,6 @@ func addGamePrompt(reader *bufio.Reader) error {
 		pathToExecutable = newPathToExecutable
 	}
 
-	if !fileExists(pathToExecutable) {
-		return ErrDoesNotExistOrIsADirectory
-	}
-
 	err = saveGameToConfig(gameName, pathToExecutable, programHome)
 	if err != nil {
 		return fmt.Errorf("save game to config failed: %w", err)
@@ -132,10 +122,14 @@ func addGamePrompt(reader *bufio.Reader) error {
 	return nil
 }
 
-// Shows the list of game entries in the config file and removes the user chosen option.
+// Shows the list of game entries in the database and removes the chosen option.
 func removeGamePrompt(reader *bufio.Reader) error {
-	cmdOptions := &ListCmdOptions{showHidden: true, hiddenGameIndicator: true}
-	err := listGamesNumbered(programHome, os.Stdout, *cmdOptions)
+	games, err := getGames(programHome, false)
+	if err != nil {
+		return fmt.Errorf("get games failed: %w", err)
+	}
+
+	err = listGamesNumbered(games, os.Stdout)
 	if err != nil {
 		return fmt.Errorf("list games failed: %w", err)
 	}
@@ -145,7 +139,7 @@ func removeGamePrompt(reader *bufio.Reader) error {
 		return fmt.Errorf("get user input failed: %w", err)
 	}
 
-	err = removeGameFromConfig(userInput, programHome)
+	err = removeGameFromConfig(games[userInput].Id, programHome)
 	if err != nil {
 		return fmt.Errorf("remove game failed: %w", err)
 	}
@@ -153,11 +147,14 @@ func removeGamePrompt(reader *bufio.Reader) error {
 	return nil
 }
 
-// Shows the list of games in the config file and
-// hides or unhides the user chosen option.
+// Shows the list of games in the database and hides or unhides the chosen option.
 func hideGamePrompt(reader *bufio.Reader) error {
-	cmdOptions := &ListCmdOptions{showHidden: true, hiddenGameIndicator: true}
-	err := listGamesNumbered(programHome, os.Stdout, *cmdOptions)
+	games, err := getGames(programHome, false)
+	if err != nil {
+		return fmt.Errorf("get games failed: %w", err)
+	}
+
+	err = listGamesNumbered(games, os.Stdout)
 	if err != nil {
 		return fmt.Errorf("list games failed: %w", err)
 	}
@@ -167,8 +164,7 @@ func hideGamePrompt(reader *bufio.Reader) error {
 		return fmt.Errorf("get user input failed: %w", err)
 	}
 
-	pathToConfigFile := filepath.Join(programHome, "config.json")
-	err = toggleHiddenGame(userInput, pathToConfigFile)
+	err = toggleHiddenGame(games[userInput].Id, programHome)
 	if err != nil {
 		return fmt.Errorf("hide game failed: %w", err)
 	}
@@ -176,48 +172,14 @@ func hideGamePrompt(reader *bufio.Reader) error {
 	return nil
 }
 
-// Looks for a file named config.json in the parentDir path and prints
-// the index and the game name of the entries in the file.
-func listGamesNumbered(parentDir string, writer io.Writer,
-	cmdOptions ListCmdOptions) error {
-	games, err := getGames(parentDir, false)
-	if err != nil {
-		return fmt.Errorf("get games failed: %w", err)
-	}
-
-	if len(games) == 0 {
-		return ErrNoGamesFound
-	}
-
+// Prints list of games with names and their indexes on the slice.
+func listGamesNumbered(games []Game, writer io.Writer) error {
 	var sb strings.Builder
-
-	if cmdOptions.onlyShowHidden {
-		index := 0
-		for _, game := range games {
-			if game.IsHidden {
-				fmt.Fprintf(&sb, "[%d] %s\n",
-					index, game.Name)
-				index++
-			}
-		}
-	} else {
-		if cmdOptions.showHidden {
-			for i, game := range games {
-				if game.IsHidden && cmdOptions.hiddenGameIndicator {
-					fmt.Fprintf(&sb, "[%d] %s [HIDDEN]\n", i, game.Name)
-				} else {
-					fmt.Fprintf(&sb, "[%d] %s\n", i, game.Name)
-				}
-			}
+	for i, game := range games {
+		if game.Hidden {
+			fmt.Fprintf(&sb, "[%d] %s [HIDDEN]\n", i, game.Name)
 		} else {
-			index := 0
-			for _, game := range games {
-				if !game.IsHidden {
-					fmt.Fprintf(&sb, "[%d] %s\n",
-						index, game.Name)
-					index++
-				}
-			}
+			fmt.Fprintf(&sb, "[%d] %s\n", i, game.Name)
 		}
 	}
 
@@ -243,10 +205,18 @@ func getIntFromUser(reader *bufio.Reader) (int, error) {
 
 // Prints a table with games and the time spent playing them.
 func listGamesWithPlaytime(configFileParentDir string, writer io.Writer) error {
-	games, err := getGames(configFileParentDir, false)
+	pathToDb := filepath.Join(configFileParentDir, "data.db")
+	db, err := sql.Open("sqlite3", pathToDb)
 	if err != nil {
-		return fmt.Errorf("get games failed: %w", err)
+		return fmt.Errorf("open db failed: %w", err)
 	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT name, playtime FROM games")
+	if err != nil {
+		return fmt.Errorf("query failed: %w", err)
+	}
+	defer rows.Close()
 
 	padding := 3
 	tw := tabwriter.
@@ -257,17 +227,16 @@ func listGamesWithPlaytime(configFileParentDir string, writer io.Writer) error {
 
 	// Table game rows
 	var gameRows strings.Builder
-	for _, game := range games {
-		if game.TimeSpentPlaying != "" {
-			gameRows.WriteString(
-				fmt.Sprintf("%s\t%s\t\n",
-					game.Name,
-					game.TimeSpentPlaying))
-		} else {
-			gameRows.WriteString(
-				fmt.Sprintf("%s\t0h0m0s\t\n",
-					game.Name))
+
+	for rows.Next() {
+		var gameName, playtime string
+		err := rows.Scan(&gameName, &playtime)
+		if err != nil {
+			return fmt.Errorf("scan failed: %w", err)
 		}
+
+		gameRows.WriteString(fmt.Sprintf("%s\t%s\t\n",
+			gameName, playtime))
 	}
 
 	fmt.Fprintln(tw, gameRows.String())
@@ -283,8 +252,7 @@ func listGamesWithLastPlayed(configFileParentDir string, writer io.Writer) error
 	}
 
 	if len(games) == 0 {
-		fmt.Fprintln(writer, "No games found in log file.")
-		return nil
+		return ErrNoGamesFound
 	}
 
 	padding := 4
@@ -292,47 +260,29 @@ func listGamesWithLastPlayed(configFileParentDir string, writer io.Writer) error
 		NewWriter(writer, 0, 0, padding, ' ', tabwriter.AlignRight)
 
 	// Table header
-	fmt.Fprintln(tw, "Game Name\tLast Time Played\t")
+	fmt.Fprintln(tw, "ID\tGame Name\tLast Time Played\t")
 
 	// Table game rows
 	var gameRows strings.Builder
-	timeNow := time.Now().UTC()
+	timeNow := time.Now()
 
-	for gameName, lastPlayedTime := range games {
-		if _, err := gameRows.WriteString(fmt.
-			Sprintf("%s\t", gameName)); err != nil {
-			return fmt.Errorf("string builder write failed: %w", err)
-		}
+	for _, game := range games {
+		gameRows.WriteString(fmt.Sprintf("%d\t", game.Id))
+		gameRows.WriteString(fmt.Sprintf("%s\t", game.Name))
 
-		// Comparing time now to last played time (both are UTC)
-		daysAgo := int(timeNow.Sub(lastPlayedTime) / (24 * time.Hour))
+		timeSince := time.Duration.Round(timeNow.Sub(game.LastPlayed), time.Second)
+		sameDay := timeNow.Format(time.DateOnly) == game.LastPlayed.Format(time.DateOnly)
 
-		// Prints "Today"
-		if daysAgo == 0 {
-			if _, err := gameRows.WriteString(fmt.
-				Sprintf("%s", "Today\t\n")); err != nil {
-				return fmt.Errorf("string builder write failed: %w", err)
-			}
-			continue
-		}
-
-		// Prints "<date> (1 day ago)"
-		if daysAgo == 1 {
-			if _, err := gameRows.WriteString(fmt.
-				Sprintf("%s (%d day ago)\t\n",
-					lastPlayedTime.Format(time.DateOnly),
-					daysAgo)); err != nil {
-				return fmt.Errorf("string builder write failed: %w", err)
-			}
-			continue
-		}
-
-		// Prints "<date> (x days ago)"
-		if _, err := gameRows.WriteString(fmt.
-			Sprintf("%s (%d days ago)\t\n",
-				lastPlayedTime.Format(time.DateOnly),
-				daysAgo)); err != nil {
-			return fmt.Errorf("string builder write failed: %w", err)
+		if sameDay {
+			// Prints "Today (x ago)"
+			gameRows.WriteString(fmt.Sprintf("%s (%s ago)\t\n",
+				"Today",
+				timeSince))
+		} else {
+			// Prints "<date> (x ago)"
+			gameRows.WriteString(fmt.Sprintf("%s (%s ago)\t\n",
+				game.LastPlayed.Format(time.DateOnly),
+				timeSince))
 		}
 	}
 
@@ -343,15 +293,13 @@ func listGamesWithLastPlayed(configFileParentDir string, writer io.Writer) error
 
 // Prints a table with games and the time spent playing them in the last two weeks.
 func listGamesWithPlaytimeLastTwoWeeks(configFileParentDir string, writer io.Writer) error {
-	games, totalPlaytime, err :=
-		getGamesWithPlaytimeLastTwoWeeks(configFileParentDir)
+	games, totalPlaytime, err := getGamesWithPlaytimeLastTwoWeeks(configFileParentDir)
 	if err != nil {
 		return fmt.Errorf("get games failed: %w", err)
 	}
 
 	if len(games) == 0 {
-		fmt.Fprintln(writer, "No games found in log file.")
-		return nil
+		return ErrNoGamesFound
 	}
 
 	padding := 4
@@ -359,19 +307,19 @@ func listGamesWithPlaytimeLastTwoWeeks(configFileParentDir string, writer io.Wri
 		NewWriter(writer, 0, 0, padding, ' ', tabwriter.AlignRight)
 
 	// Table header
-	fmt.Fprintln(tw, "Game Name\tTime Spent Playing Last Two Weeks\t")
+	fmt.Fprintln(tw, "ID\tGame Name\tTime Spent Playing Last Two Weeks\t")
 
 	// Table game rows
 	var gameRows strings.Builder
 
-	for gameName, playtime := range games {
-		gameRows.WriteString(fmt.
-			Sprintf("%s\t", gameName))
+	for _, game := range games {
+		gameRows.WriteString(fmt.Sprintf("%d\t", game.Id))
+		gameRows.WriteString(fmt.Sprintf("%s\t", game.Name))
 
-		percentOfTotal := (playtime.Hours() / totalPlaytime.Hours()) * 100
+		percentOfTotal := (game.Playtime.Hours() / totalPlaytime.Hours()) * 100
 		gameRows.WriteString(fmt.
 			Sprintf("%s (%.1f%%)\t\n",
-				playtime,
+				game.Playtime,
 				percentOfTotal))
 	}
 

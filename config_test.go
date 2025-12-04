@@ -1,474 +1,461 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	"database/sql"
 	"errors"
-	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"testing"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
-func Test_CreateEmptyConfigFileAt_PathIsNotADirectory(t *testing.T) {
-	setupTestsDir(t)
-	tempFile, err := os.CreateTemp(testsDir, "test")
+func Test_SaveGameToConfig_HappyPath(t *testing.T) {
+	dbParentDir := t.TempDir()
+	pathToDb := filepath.Join(dbParentDir, "data.db")
+
+	err := saveGameToConfig("Test Game", "Test Path", dbParentDir)
 	if err != nil {
-		t.Errorf("error creating temp file: %v\n", err)
+		t.Fatalf("save game failed: '%v'\n", err)
 	}
-	defer tempFile.Close()
 
-	var wantErr *fs.PathError
-	err = createEmptyConfigFileAt(tempFile.Name())
-	if !errors.As(err, &wantErr) {
-		t.Errorf("got: '%v'; want: '*fs.PathError';\n", err)
-	}
-}
-
-func Test_CreateEmptyConfigFileAt_HappyPath(t *testing.T) {
-	setupTestsDir(t)
-	pathToTempDir, err := os.MkdirTemp(testsDir, "tempDir")
-	pathToConfigFile := filepath.Join(pathToTempDir, "config.json")
+	db, err := sql.Open("sqlite3", pathToDb)
 	if err != nil {
-		t.Errorf("error creating temp dir: %v\n", err)
+		t.Fatalf("open db failed: '%v'\n", err)
 	}
+	defer db.Close()
 
-	err = createEmptyConfigFileAt(pathToTempDir)
+	rows, err := db.Query("SELECT * FROM games")
 	if err != nil {
-		t.Errorf("got: '%v'; want nil;\n", err)
+		t.Fatalf("query failed: '%v'\n", err)
 	}
+	defer rows.Close()
 
-	gotConfigFileData, err := os.ReadFile(pathToConfigFile)
-	if err != nil {
-		t.Errorf("error reading file: %v\n", err)
-	}
+	var (
+		gotId                         int
+		gotName, gotPath, gotPlaytime string
+		isHidden                      bool
+	)
 
-	wantConfigFileData := []byte("[]")
-	if !bytes.Equal(gotConfigFileData, wantConfigFileData) {
-		t.Errorf("got: '%s'; want '%s';\n", gotConfigFileData, wantConfigFileData)
-	}
-}
-
-func Test_SaveGameToConfig_CreatesConfigFileIfMissing(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir, err := os.MkdirTemp(testsDir, "tempDir")
-	if err != nil {
-		t.Errorf("error creating temp dir: %v\n", err)
-	}
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
-	pathToTempFile := createTempFileForTests(t)
-
-	err = saveGameToConfig("Test Game", pathToTempFile, configFileParentDir)
-	if err != nil {
-		t.Error(err)
-	}
-	if !fileExists(pathToConfigFile) {
-		t.Errorf("'%s' does not exist!\n", pathToConfigFile)
-	}
-
-	configFileData, err := loadConfigFile(configFileParentDir)
-	if err != nil {
-		t.Errorf("error loading config file: %v\n", err)
-	}
-
-	games := []Game{}
-	err = json.Unmarshal(configFileData, &games)
-	if err != nil {
-		t.Errorf("error unmarshaling: %v\n", err)
-	}
-
-	if len(games) != 1 {
-		t.Errorf("got length %v; want length %v;\n", len(games), 1)
-	}
-}
-
-func Test_AppendNewGameToConfigFile_ConfigFileHasInvalidData(t *testing.T) {
-	err := appendNewGameToConfigFile([]byte("invalid test"), nil, "")
-	var wantErr *json.SyntaxError
-	if !errors.As(err, &wantErr) {
-		t.Errorf("got '%v'; want '*json.SyntaxError';\n", err)
-	}
-}
-
-// TODO: I think passing an empty Game to it should throw some error.
-func Test_AppendNewGameToConfigFile_GameIsEmpty(t *testing.T) {
-	setupTestsDir(t)
-	configFileData := []byte("[]")
-	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
-	var game Game
-	err := appendNewGameToConfigFile(configFileData, &game, pathToConfigFile)
-	if err != nil {
-		t.Errorf("got '%v'; want nil;\n", err)
-	}
-}
-
-func Test_AppendNewGameToConfigFile_PathIsADirectory(t *testing.T) {
-	setupTestsDir(t)
-	configFileData := []byte("[]")
-	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
-
-	var game Game
-	err := appendNewGameToConfigFile(configFileData, &game, configFileParentDir)
-
-	var wantErr *fs.PathError
-	if !errors.As(err, &wantErr) {
-		t.Errorf("got '%v'; want '*fs.PathError';\n", err)
-	}
-}
-
-func Test_AppendNewGameToConfigFile_HappyPath(t *testing.T) {
-	setupTestsDir(t)
-	configFileData := []byte("[]")
-	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
-
-	wantGamesLength := 10
-	for i := range wantGamesLength {
-		game := &Game{
-			Name:             fmt.Sprintf("Test Game %v", i),
-			PathToExecutable: ""}
-
-		configFileData, err := os.ReadFile(pathToConfigFile)
+	for rows.Next() {
+		err := rows.Scan(&gotId, &gotName, &gotPath, &gotPlaytime, &isHidden)
 		if err != nil {
-			t.Errorf("error reading config file: %v\n", err)
-		}
-
-		err = appendNewGameToConfigFile(configFileData, game, pathToConfigFile)
-		if err != nil {
-			t.Errorf("error appending new game to config file: %v\n", err)
+			t.Fatalf("scan failed: '%v'\n", err)
 		}
 	}
 
-	configFileData, err := os.ReadFile(pathToConfigFile)
-	if err != nil {
-		t.Errorf("error reading config file: %v\n", err)
+	if gotId != 1 {
+		t.Fatalf("got: '%d'; want: '%d';\n", gotId, 1)
 	}
 
-	games := []Game{}
-	err = json.Unmarshal(configFileData, &games)
-	if err != nil {
-		t.Errorf("error unmarshaling config file: %v\n", err)
-
+	if gotName != "Test Game" {
+		t.Fatalf("got: '%s'; want: '%s';\n", gotName, "Test Game")
 	}
 
-	gotGamesLength := len(games)
-	if gotGamesLength != wantGamesLength {
-		t.Errorf("got length='%v'; want length='%v';\n",
-			gotGamesLength, wantGamesLength)
+	if gotPath != "Test Path" {
+		t.Fatalf("got: '%s'; want: '%s';\n", gotPath, "Test Path")
 	}
 
-	for i, game := range games {
-		wantGameName := fmt.Sprintf("Test Game %v", i)
-		if game.Name != wantGameName {
-			t.Errorf("[%v]: got '%s'; want '%s';\n",
-				i, game.Name, wantGameName)
-		}
+	if gotPlaytime != "0h0m0s" {
+		t.Fatalf("got: '%s'; want: '%s';\n", gotPlaytime, "0h0m0s")
+	}
+
+	if isHidden != false {
+		t.Fatalf("got: '%t'; want: '%t';\n", isHidden, false)
 	}
 }
 
 func Test_RemoveGameFromConfig_HappyPath(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, []byte("[]"))
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
+	dbParentDir := t.TempDir()
+	pathToDb := filepath.Join(dbParentDir, "data.db")
 
-	// pathToExecutable accepts any filepath as long as it exists.
-	for i := range 10 {
-		err := saveGameToConfig(
-			fmt.Sprintf("Test Game %v", i),
-			pathToConfigFile,
-			configFileParentDir)
-		if err != nil {
-			t.Errorf("[%v] error saving game to config: %v\n", i, err)
-		}
-	}
-
-	for i := range 3 {
-		err := removeGameFromConfig(0, configFileParentDir)
-		if err != nil {
-			t.Errorf("[%v] error removing game from config: %v\n", i, err)
-		}
-	}
-
-	games := []Game{}
-	configFileData, err := loadConfigFile(configFileParentDir)
+	err := saveGameToConfig("Test Game", "Test Path", dbParentDir)
 	if err != nil {
-		t.Errorf("error loading config file: %v\n", err)
+		t.Fatalf("save game failed: '%v'\n", err)
 	}
 
-	err = json.Unmarshal(configFileData, &games)
-	if err != nil {
-		t.Errorf("error unmarshaling: %v\n", err)
-	}
-
-	gotLength := len(games)
-	wantLength := 7
-	if gotLength != wantLength {
-		t.Errorf("got length %v; want length %v\n", gotLength, wantLength)
-	}
-
-	for _, game := range games {
-		if game.Name == "Test Game 0" ||
-			game.Name == "Test Game 1" ||
-			game.Name == "Test Game 2" {
-			t.Errorf("'%s' was not deleted!\n", game.Name)
-		}
-	}
-}
-
-func Test_RemoveGameFromConfig_NoGamesFoundInConfigFile(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-
-	err := removeGameFromConfig(0, configFileParentDir)
-	if !errors.Is(err, ErrNoGamesFound) {
-		t.Errorf("got '%v'; want '%v';\n", err, ErrNoGamesFound)
-	}
-}
-
-func Test_RemoveGameFromConfig_InvalidOption(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-
-	// pathToExecutable takes any path as long as it exists
-	err := saveGameToConfig("Test Game", configFileParentDir, configFileParentDir)
-	if err != nil {
-		t.Errorf("save game to config failed: %v\n", err)
-	}
-
-	err = removeGameFromConfig(2, configFileParentDir)
-	if !errors.Is(err, ErrInvalidOption) {
-		t.Errorf("got '%v'; want '%v';\n", err, ErrInvalidOption)
-	}
-	err = removeGameFromConfig(-1, configFileParentDir)
-	if !errors.Is(err, ErrInvalidOption) {
-		t.Errorf("got '%v'; want '%v';\n", err, ErrInvalidOption)
-	}
-}
-
-func Test_LoadConfigFile(t *testing.T) {
-	setupTestsDir(t)
-	games := []Game{{Name: "Test Game", PathToExecutable: ""}}
-	dataForHappyPathTest, err := json.Marshal(games)
-	if err != nil {
-		t.Fatalf("error during marshal: %v\n", err)
-	}
-
-	emptyConfigFileParentDir := createTempDirWithConfigFile(t, nil)
-	badConfigFileParentDir := createTempDirWithConfigFile(t, []byte("test"))
-	happyPathParentDir := createTempDirWithConfigFile(t, dataForHappyPathTest)
-
-	tests := map[string]struct {
-		input    string
-		wantData []byte
-		wantErr  error
-	}{
-		"path does not exist": {
-			input:    "a/b/c/404",
-			wantData: nil,
-			wantErr:  fs.ErrNotExist},
-		"empty config file": {
-			input:    emptyConfigFileParentDir,
-			wantData: []byte("[]"),
-			wantErr:  nil},
-		"bad config file": {
-			input:    badConfigFileParentDir,
-			wantData: []byte("test"),
-			wantErr:  nil},
-		"happy path": {
-			input:    happyPathParentDir,
-			wantData: dataForHappyPathTest,
-			wantErr:  nil},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			gotData, gotErr := loadConfigFile(test.input)
-			if !slices.Equal(gotData, test.wantData) {
-				t.Errorf("got '%s'; want '%s';\n", gotData, test.wantData)
-			}
-			if !errors.Is(gotErr, test.wantErr) {
-				t.Errorf("got '%v'; want '%v';\n", gotErr, test.wantErr)
-			}
-		})
-	}
-}
-
-func Test_GetGames_HappyPath(t *testing.T) {
-	goodEndingGames := []Game{
-		{Name: "Test Game 1", PathToExecutable: "/test/path/bar"},
-		{Name: "Test Game 2", PathToExecutable: "/test/path/foo"}}
-
-	goodEndingData, err := json.Marshal(goodEndingGames)
-	if err != nil {
-		t.Errorf("error during marshal: %v\n", err)
-	}
-
-	goodConfigFileDir := createTempDirWithConfigFile(t, goodEndingData)
-
-	games, err := getGames(goodConfigFileDir, false)
-	if !reflect.DeepEqual(games, goodEndingGames) {
-		t.Errorf("got '%v'; want '%v';\n", games, goodEndingGames)
-	}
-}
-
-func Test_GetGames_InvalidConfigFile(t *testing.T) {
-	configFileParentDir := createTempDirWithConfigFile(t, []byte("some data"))
-	games, err := getGames(configFileParentDir, false)
-
-	var wantErr *json.SyntaxError
-	if !errors.As(err, &wantErr) {
-		t.Errorf("got '%v'; want '*json.SyntaxError';\n", err)
-	}
-	if games != nil {
-		t.Errorf("got '%v'; want '%v'\n", games, nil)
-	}
-}
-
-func Test_GetGames_ExcludeHiddenGamesGivesValidLength(t *testing.T) {
-	setupTestsDir(t)
-
-	games := []Game{
-		{Name: "Test Game 1"},
-		{Name: "Test Game 2"},
-		{Name: "Test Game 3"},
-		{Name: "Test Game 4"},
-		{Name: "Test Game 5", IsHidden: true},
-		{Name: "Test Game 6", IsHidden: true},
-	}
-
-	configFileData, err := json.Marshal(games)
-	if err != nil {
-		t.Fatalf("error during marshal: %v\n", err)
-	}
-
-	goodConfigFileDir := createTempDirWithConfigFile(t, configFileData)
-
-	gotGames, err := getGames(goodConfigFileDir, true)
-	if len(gotGames) != 4 {
-		t.Fatalf("got '%d'; want '%d';\n", len(gotGames), 4)
-	}
-}
-
-func Test_GetGames_ExcludesHiddenGames(t *testing.T) {
-	setupTestsDir(t)
-
-	games := []Game{
-		{Name: "Test Game 1"},
-		{Name: "Test Game 2", IsHidden: true}}
-
-	configFileData, err := json.Marshal(games)
-	if err != nil {
-		t.Fatalf("marshal failed: '%v'\n", err)
-	}
-
-	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
-
-	excludeHiddenGames := true
-	gotGames, err := getGames(configFileParentDir, excludeHiddenGames)
+	err = removeGameFromConfig(1, dbParentDir)
 	if err != nil {
 		t.Fatalf("got: '%v'; want nil;\n", err)
 	}
 
-	for _, g := range gotGames {
-		if g.IsHidden {
-			t.Fatalf("got: '%v'; must NOT contain hidden games.\n",
-				g)
-		}
+	db, err := sql.Open("sqlite3", pathToDb)
+	if err != nil {
+		t.Fatalf("open db failed: '%v'\n", err)
+	}
+	defer db.Close()
 
-		if g.Name == "Test Game 2" {
-			t.Fatalf("must NOT contain 'Test Game 2'.\n")
+	gameCount, err := db.Query("SELECT COUNT(*) FROM games")
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	defer gameCount.Close()
+
+	var numGames int
+	for gameCount.Next() {
+		err := gameCount.Scan(&numGames)
+		if err != nil {
+			t.Fatalf("scan failed: %v", err)
 		}
 	}
 
-	if len(gotGames) != 1 {
-		t.Fatalf("got '%d'; want '%d';\n", len(gotGames), 1)
+	if numGames != 0 {
+		t.Fatalf("got: '%d'; want: '%d';\n", numGames, 0)
 	}
 }
 
-func Test_SaveTimeSpentPlayingToConfig_HappyPath(t *testing.T) {
-	setupTestsDir(t)
-	games := []Game{{
-		Name:             "TestGame",
-		PathToExecutable: "",
-		TimeSpentPlaying: "0h0m0s"}}
-	configFileData, err := json.Marshal(games)
+func Test_RemoveGameFromConfig_NoGamesFound(t *testing.T) {
+	dbParentDir := t.TempDir()
+	pathToDb := filepath.Join(dbParentDir, "data.db")
+
+	db, err := sql.Open("sqlite3", pathToDb)
 	if err != nil {
-		t.Errorf("error marshaling games: %v\n", err)
+		t.Fatalf("open db failed: '%v'\n", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS games (id INTEGER PRIMARY KEY, name TEXT, path TEXT, playtime TEXT, hidden INTEGER)")
+	if err != nil {
+		t.Fatalf("create table failed: '%v'\n", err)
 	}
 
-	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
-	timeSpentPlaying := time.Duration(2) * time.Hour
-	userInput := 0
+	err = removeGameFromConfig(1, dbParentDir)
+	if !errors.Is(err, ErrNoGamesFound) {
+		t.Fatalf("got '%v'; want '%v';\n", err, ErrNoGamesFound)
+	}
+}
 
-	err = saveTimeSpentPlayingToConfig(games, userInput, timeSpentPlaying, pathToConfigFile)
+func Test_RemoveGameFromConfig_InvalidIndex(t *testing.T) {
+	err := removeGameFromConfig(0, "Test Path")
+	if !errors.Is(err, ErrInvalidOption) {
+		t.Errorf("got '%v'; want '%v';\n", err, ErrInvalidOption)
+	}
+	err = removeGameFromConfig(-1, "Test Path")
+	if !errors.Is(err, ErrInvalidOption) {
+		t.Errorf("got '%v'; want '%v';\n", err, ErrInvalidOption)
+	}
+}
+
+func Test_GetGames_HappyPath(t *testing.T) {
+	dbParentDir := t.TempDir()
+	pathToDb := filepath.Join(dbParentDir, "data.db")
+
+	db, err := sql.Open("sqlite3", pathToDb)
 	if err != nil {
-		t.Errorf("got: '%v'; want nil;\n", err)
+		t.Fatalf("open db failed: '%v'\n", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS games (id INTEGER PRIMARY KEY, name TEXT, path TEXT, playtime TEXT, hidden INTEGER)")
+	if err != nil {
+		t.Fatalf("create table failed: '%v'\n", err)
 	}
 
-	newConfigFileData, err := loadConfigFile(configFileParentDir)
-	var newGames []Game
-	err = json.Unmarshal(newConfigFileData, &newGames)
-	if err != nil {
-		t.Errorf("error unmarshaling new config file: %v\n", err)
+	gameName := "Test Game"
+	gamePath := "Test Path"
+	playtime := "0h0m0s"
+	hidden := false
+
+	games := []Game{
+		{Id: 1, Name: gameName, Path: gamePath, Playtime: playtime, Hidden: hidden},
+		{Id: 2, Name: gameName, Path: gamePath, Playtime: playtime, Hidden: hidden},
+		{Id: 3, Name: gameName, Path: gamePath, Playtime: playtime, Hidden: hidden},
+		{Id: 4, Name: gameName, Path: gamePath, Playtime: playtime, Hidden: true},
+		{Id: 5, Name: gameName, Path: gamePath, Playtime: playtime, Hidden: true},
 	}
 
-	gotTimeSpentPlaying := newGames[0].TimeSpentPlaying
-	if gotTimeSpentPlaying != timeSpentPlaying.String() {
-		t.Errorf("got: '%s'; want '%s';\n", gotTimeSpentPlaying, timeSpentPlaying)
+	transaction, err := db.Begin()
+	if err != nil {
+		t.Fatalf("begin transaction failed: '%v'\n", err)
+	}
+
+	for i, game := range games {
+		transaction.Exec("INSERT INTO games (name, path, playtime, hidden) VALUES(?, ?, ?, ?)")
+		_, err = transaction.Exec("INSERT INTO games (name, path, playtime, hidden) VALUES(?, ?, ?, ?)",
+			game.Name, game.Path, game.Playtime, game.Hidden)
+		if err != nil {
+			t.Fatalf("insert no.%d failed: '%v'\n", i, err)
+		}
+	}
+
+	err = transaction.Commit()
+	if err != nil {
+		t.Fatalf("commit transaction failed: '%v'\n", err)
+	}
+
+	excludeHiddenGames := false
+	gotGames, err := getGames(dbParentDir, excludeHiddenGames)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil;\n", err)
+	}
+
+	if len(gotGames) != len(games) {
+		t.Fatalf("got: '%d'; want: '%d';\n", len(gotGames), len(games))
+	}
+
+	if !reflect.DeepEqual(games, gotGames) {
+		t.Fatalf("got: '%v'; want: '%v';\n", gotGames, games)
+	}
+
+	excludeHiddenGames = true
+	nonHiddenGames, err := getGames(dbParentDir, excludeHiddenGames)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil;\n", err)
+	}
+
+	if len(nonHiddenGames) != 3 {
+		t.Fatalf("got: '%d'; want: '%d';\n", len(nonHiddenGames), 3)
+	}
+
+	for _, game := range nonHiddenGames {
+		if game.Hidden {
+			t.Fatalf("got: '%t'; want '%t';\n", game.Hidden, false)
+		}
+	}
+}
+
+func Test_SaveTimeSpentPlaying_HappyPath(t *testing.T) {
+	configFileParentDir := t.TempDir()
+	err := saveGameToConfig("Test Game", "Test Path", configFileParentDir)
+	if err != nil {
+		t.Fatalf("save game failed: '%v'\n", err)
+	}
+
+	gameId := 1
+	timeSpent := time.Duration(2) * time.Hour
+	pathToDb := filepath.Join(configFileParentDir, "data.db")
+
+	err = saveTimeSpentPlaying(gameId, timeSpent, pathToDb)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil;\n", err)
+	}
+
+	games, err := getGames(configFileParentDir, false)
+	if err != nil {
+		t.Fatalf("get games failed: '%v'\n", err)
+	}
+
+	wantPlaytime := "2h0m0s"
+	if games[0].Playtime != wantPlaytime {
+		t.Fatalf("got: '%s'; want: '%s';\n", games[0].Playtime, wantPlaytime)
+	}
+}
+
+func Test_SaveTimeSpentPlaying_InvalidGameId(t *testing.T) {
+	err := saveTimeSpentPlaying(0, 0, "")
+	if !errors.Is(err, ErrInvalidGameId) {
+		t.Fatalf("got: '%v'; want '%v';\n", err, ErrInvalidGameId)
 	}
 }
 
 func Test_ToggleHiddenGame_HappyPath(t *testing.T) {
-	setupTestsDir(t)
-
-	games := []Game{{Name: "Test Game 1", IsHidden: false}}
-	configFileData, err := json.Marshal(games)
+	configFileParentDir := t.TempDir()
+	err := saveGameToConfig("Test Game", "Test Path", configFileParentDir)
 	if err != nil {
-		t.Fatalf("marshal failed: '%v'\n", err)
+		t.Fatalf("save game failed: '%v'\n", err)
 	}
 
-	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
-	userInput := 0
-
-	err = toggleHiddenGame(userInput, pathToConfigFile)
+	idOfChosenGame := 1 // Sqlite begins with 1
+	err = toggleHiddenGame(idOfChosenGame, configFileParentDir)
 	if err != nil {
 		t.Fatalf("got: '%v'; want nil\n", err)
 	}
 
-	gotGames, err := getGames(configFileParentDir, false)
+	excludeHiddenGames := false
+	gotGames, err := getGames(configFileParentDir, excludeHiddenGames)
 	if err != nil {
 		t.Fatalf("get games failed: '%v'\n", err)
 	}
 
-	for _, game := range gotGames {
-		if !game.IsHidden {
-			t.Errorf("got: '%t'; want: '%t';\n",
-				game.IsHidden, true)
-		}
+	if !gotGames[0].Hidden {
+		t.Fatalf("got: '%t'; want: '%t';\n", gotGames[0].Hidden, true)
 	}
 
-	err = toggleHiddenGame(userInput, pathToConfigFile)
+	err = toggleHiddenGame(idOfChosenGame, configFileParentDir)
 	if err != nil {
 		t.Fatalf("got: '%v'; want nil\n", err)
 	}
 
-	// Config file changed with toggleHiddenGame call, getting games again
-	gotGames, err = getGames(configFileParentDir, false)
+	gotGames, err = getGames(configFileParentDir, excludeHiddenGames)
 	if err != nil {
 		t.Fatalf("get games failed: '%v'\n", err)
 	}
 
-	for _, game := range gotGames {
-		if game.IsHidden {
-			t.Errorf("got: '%t'; want: '%t';\n",
-				game.IsHidden, false)
+	if gotGames[0].Hidden {
+		t.Fatalf("got: '%t'; want: '%t';\n", gotGames[0].Hidden, false)
+	}
+}
+
+func Test_SaveSession_HappyPath(t *testing.T) {
+	configFileParentDir := t.TempDir()
+	pathToDb := filepath.Join(configFileParentDir, "data.db")
+
+	err := saveGameToConfig("Test Game", "Test Path", configFileParentDir)
+	if err != nil {
+		t.Fatalf("save game failed: '%v'\n", err)
+	}
+
+	timeStart, err := time.Parse(time.RFC1123, "Mon, 02 Jan 2020 15:00:00 UTC")
+	if err != nil {
+		t.Fatalf("parse failed: '%v'\n", err)
+	}
+
+	timeEnd, err := time.Parse(time.RFC1123, "Mon, 02 Jan 2020 15:32:05 UTC")
+	if err != nil {
+		t.Fatalf("parse failed: '%v'\n", err)
+	}
+
+	gameId := 1
+	err = saveSession(gameId, timeStart, timeEnd, pathToDb)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil;\n", err)
+	}
+
+	db, err := sql.Open("sqlite3", pathToDb)
+	if err != nil {
+		t.Fatalf("open db failed: '%v'\n", err)
+	}
+	defer db.Close()
+
+	row, err := db.Query("SELECT * FROM sessions WHERE gameId = ?", gameId)
+	if err != nil {
+		t.Fatalf("query failed: '%v'\n", err)
+	}
+	defer row.Close()
+
+	var gotId int
+	var gotStartStr, gotEndStr string
+
+	for row.Next() {
+		err := row.Scan(&gotId, &gotStartStr, &gotEndStr)
+		if err != nil {
+			t.Fatalf("scan failed: '%v'\n", err)
 		}
+	}
+
+	gotStart, err := time.Parse(time.RFC1123, gotStartStr)
+	if err != nil {
+		t.Fatalf("time parse failed: '%v'\n", err)
+	}
+
+	gotEnd, err := time.Parse(time.RFC1123, gotEndStr)
+	if err != nil {
+		t.Fatalf("time parse failed: '%v'\n", err)
+	}
+
+	if gotId != gameId {
+		t.Fatalf("got: '%d'; want: '%d';\n", gotId, gameId)
+	}
+
+	if !gotStart.Equal(timeStart) {
+		t.Fatalf("got: '%s'; want: '%s';\n", gotStartStr, timeStart)
+	}
+
+	if !gotEnd.Equal(timeEnd) {
+		t.Fatalf("got: '%s'; want: '%s';\n", gotEndStr, timeEnd)
+	}
+}
+
+func Test_GetGamesWithLastPlayedTime_HappyPath(t *testing.T) {
+	configFileParentDir := t.TempDir()
+	pathToDb := filepath.Join(configFileParentDir, "data.db")
+
+	for range 2 {
+		err := saveGameToConfig("Test Game", "Test Path", configFileParentDir)
+		if err != nil {
+			t.Fatalf("save game failed: '%v'\n", err)
+		}
+	}
+
+	gameId := 1
+	timeStart := time.Now()
+	t1 := timeStart.Add(time.Duration(30) * time.Minute)
+
+	err := saveSession(gameId, timeStart, t1, pathToDb)
+	if err != nil {
+		t.Fatalf("save session failed: '%v'\n", err)
+	}
+
+	// Only latest session will be retrieved
+	t2 := timeStart.Add(time.Duration(2) * time.Hour)
+	err = saveSession(gameId, timeStart, t2, pathToDb)
+	if err != nil {
+		t.Fatalf("save session failed: '%v'\n", err)
+	}
+
+	t3 := timeStart.Add(time.Duration(4) * time.Hour)
+	gameId = 2
+	err = saveSession(gameId, timeStart, t3, pathToDb)
+	if err != nil {
+		t.Fatalf("save session failed: '%v'\n", err)
+	}
+
+	games, err := getGamesWithLastPlayedTime(configFileParentDir)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil;\n", err)
+	}
+
+	if len(games) != 2 {
+		t.Fatalf("got: length '%d'; want length '%d';\n", len(games), 2)
+	}
+
+	gotTime1 := games[0].LastPlayed.Format(time.RFC1123)
+	wantTime1 := t2.Format(time.RFC1123)
+	if gotTime1 != wantTime1 {
+		t.Fatalf("got: '%s'; want '%s';\n", gotTime1, wantTime1)
+	}
+
+	gotTime2 := games[1].LastPlayed.Format(time.RFC1123)
+	wantTime2 := t3.Format(time.RFC1123)
+	if gotTime2 != wantTime2 {
+		t.Fatalf("got: '%s'; want '%s';\n", gotTime2, wantTime2)
+	}
+}
+
+func Test_GetGamesWithPlaytimeLastTwoWeeks_HappyPath(t *testing.T) {
+	configFileParentDir := t.TempDir()
+	pathToDb := filepath.Join(configFileParentDir, "data.db")
+
+	err := saveGameToConfig("Test Game", "Test Path", configFileParentDir)
+	if err != nil {
+		t.Fatalf("save game failed: '%v'\n", err)
+	}
+
+	timeNow := time.Now()
+	time20DaysAgo := timeNow.AddDate(0, 0, -20).Add(1 * time.Hour)
+	time20DaysAgoEnd := time20DaysAgo.Add(3 * time.Hour)
+	timeYesterday := timeNow.AddDate(0, 0, -1)
+	timeYesterdayEnd := timeYesterday.Add(30 * time.Minute)
+
+	err = saveSession(1, time20DaysAgo, time20DaysAgoEnd, pathToDb)
+	if err != nil {
+		t.Fatalf("save session failed: '%v'\n", err)
+	}
+
+	for range 2 {
+		err = saveSession(1, timeYesterday, timeYesterdayEnd, pathToDb)
+		if err != nil {
+			t.Fatalf("save session failed: '%v'\n", err)
+		}
+	}
+
+	games, totalPlaytimeL2W, err := getGamesWithPlaytimeLastTwoWeeks(configFileParentDir)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil;\n", err)
+	}
+
+	if len(games) != 1 {
+		t.Fatalf("got length '%d'; want length '%d';\n", len(games), 1)
+	}
+
+	wantPlaytime := "1h0m0s"
+	if totalPlaytimeL2W.String() != wantPlaytime {
+		t.Fatalf("got: '%s'; want: '%s';\n", totalPlaytimeL2W, wantPlaytime)
+	}
+
+	gotPlaytime := games[1].Playtime.String()
+	if gotPlaytime != wantPlaytime {
+		t.Fatalf("got: '%s'; want: '%s';\n", gotPlaytime, wantPlaytime)
 	}
 }

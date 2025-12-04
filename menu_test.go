@@ -3,10 +3,9 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,76 +15,62 @@ import (
 )
 
 func Test_AddGamePrompt(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	// Using this for happy path, any path will do as long as it exists.
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
+	configFileParentDir := t.TempDir()
+	tempFile, err := os.CreateTemp(configFileParentDir, "file")
+	if err != nil {
+		t.Fatalf("create temp file failed: '%v';\n", err)
+	}
+	defer tempFile.Close()
 
-	fileWithSpaces := setupAddGamePromptTest(t, "With Some Spaces")
-	fileWithEmojis := setupAddGamePromptTest(t, "😀😃😄😁🤣🥲🥹☺️")
-	fileWithCJK := setupAddGamePromptTest(t, "史诗 テスト 파일")
-
-	// From OS user config directory to OS temp directory
+	// Changing global variable from real user config directory to
+	// OS temp directory
 	origProgramHome := programHome
 	programHome = configFileParentDir
 	defer func() { programHome = origProgramHome }()
 	defer quietOutput()()
 
-	// input is: "<game name>\n<path to executable>\n"
-	tests := map[string]struct {
-		input  string
-		result error
-	}{
-		"empty string": {
-			input:  "\n\n",
-			result: ErrDoesNotExistOrIsADirectory},
-		"file not found": {
-			input:  "test\nSomeNonExistentFileHere\n",
-			result: ErrDoesNotExistOrIsADirectory},
-		"happy path": {
-			input:  fmt.Sprintf("test\n%s\n", pathToConfigFile),
-			result: nil},
-		"path with spaces": {
-			input:  fmt.Sprintf("test\n%s\n", fileWithSpaces.Name()),
-			result: nil},
-		"path is a directory": {
-			input:  fmt.Sprintf("test\n%s\n", testsDir),
-			result: ErrDoesNotExistOrIsADirectory},
-		"path has emojis": {
-			input:  fmt.Sprintf("test\n%s\n", fileWithEmojis.Name()),
-			result: nil},
-		"cjk path": {
-			input:  fmt.Sprintf("test\n%s\n", fileWithCJK.Name()),
-			result: nil},
+	userInput := fmt.Sprintf("Test Game\n%s\n", tempFile.Name())
+
+	r := bufio.NewReader(strings.NewReader(userInput))
+	err = addGamePrompt(r)
+	if err != nil {
+		t.Fatalf("got: '%v'; want nil;\n", err)
 	}
 
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			r := bufio.NewReader(strings.NewReader(test.input))
+	games, err := getGames(configFileParentDir, false)
+	if err != nil {
+		t.Fatalf("get games failed: '%v'\n", err)
+	}
 
-			got := addGamePrompt(r)
-			want := test.result
-
-			if !errors.Is(got, want) {
-				t.Fatalf("got '%v'; want '%v';\n", got, want)
-			}
-		})
+	if games[0].Id != 1 {
+		t.Fatalf("got: '%d'; want: '%d';\n", games[0].Id, 1)
+	}
+	if games[0].Name != "Test Game" {
+		t.Fatalf("got: '%s'; want: '%s';\n", games[0].Name, "Test Game")
+	}
+	if games[0].Path != tempFile.Name() {
+		t.Fatalf("got: '%s'; want: '%s';\n", games[0].Path, tempFile.Name())
+	}
+	if games[0].Playtime != "0h0m0s" {
+		t.Fatalf("got: '%s'; want: '%s';\n", games[0].Playtime, "0h0m0s")
+	}
+	if games[0].Hidden {
+		t.Fatalf("got: '%t'; want: '%t';\n", games[0].Hidden, false)
 	}
 }
 
 func Test_RemoveGamePrompt(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
+	configFileParentDir := t.TempDir()
 
-	for i := range 10 {
-		// pathToExecutable takes any path as long as it exists.
-		err := saveGameToConfig("Test Game", pathToConfigFile, configFileParentDir)
+	for i := range 2 {
+		err := saveGameToConfig("Test Game", "Test Path", configFileParentDir)
 		if err != nil {
-			t.Errorf("[%v] error saving game to config: %v\n", i, err)
+			t.Fatalf("save game no.%d failed: '%v'\n", i, err)
 		}
 	}
 
+	// Changing global variable from real user config directory to
+	// OS temp directory
 	origProgramHome := programHome
 	programHome = configFileParentDir
 	defer func() {
@@ -93,217 +78,102 @@ func Test_RemoveGamePrompt(t *testing.T) {
 	}()
 	defer quietOutput()()
 
-	tests := map[string]struct {
-		input  string
-		result error
-	}{
-		"empty string": {
-			input:  "\n",
-			result: strconv.ErrSyntax},
-		"happy path": {
-			input:  "0\n",
-			result: nil},
-		"input with spaces": {
-			input:  "1 2 3 4 5 6 7\n",
-			result: strconv.ErrSyntax},
-		"input has no numbers": {
-			input:  "no numbers here\n",
-			result: strconv.ErrSyntax},
-		"emoji input": {
-			input:  "☺️\n",
-			result: strconv.ErrSyntax},
-		"cjk input": {
-			input:  "史诗 テスト 파일\n",
-			result: strconv.ErrSyntax},
-		"less than zero": {
-			input:  "-1\n",
-			result: ErrInvalidOption},
-		"notation": {
-			input:  "1e9\n",
-			result: strconv.ErrSyntax},
-		"negative notation": {
-			input:  "-1e9\n",
-			result: strconv.ErrSyntax},
-		"tab character": {
-			input:  "2\t\n",
-			result: nil},
+	// Deleting first Game in the slice, with id = 1.
+	userInput := bufio.NewReader(strings.NewReader("0\n"))
+	err := removeGamePrompt(userInput)
+	if err != nil {
+		t.Fatalf("got '%v'; want nil;\n", err)
 	}
 
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			r := bufio.NewReader(strings.NewReader(test.input))
+	games, err := getGames(configFileParentDir, false)
+	if err != nil {
+		t.Fatalf("get games failed: '%v'\n", err)
+	}
 
-			got := removeGamePrompt(r)
-			want := test.result
+	if len(games) != 1 {
+		t.Fatalf("got length '%d'; want length '%d';\n", len(games), 1)
+	}
 
-			if !errors.Is(got, want) {
-				t.Errorf("got '%v'; want '%v';\n", got, want)
-			}
-		})
+	if games[0].Id != 2 {
+		t.Fatalf("got id '%d'; want id '%d';\n", games[0].Id, 2)
 	}
 }
 
 func Test_ListGamesNumbered_HappyPath(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
-	// pathToExecutable can be any file as long as it exists.
-	err := saveGameToConfig("Test Game", pathToConfigFile, configFileParentDir)
+	configFileParentDir := t.TempDir()
+
+	for i := range 2 {
+		err := saveGameToConfig("Test Game", "Test Path", configFileParentDir)
+		if err != nil {
+			t.Fatalf("save game no.%d failed: '%v'\n", i, err)
+		}
+	}
+
+	err := toggleHiddenGame(2, configFileParentDir)
 	if err != nil {
-		t.Errorf("error saving game to config: %v\n", err)
+		t.Fatalf("toggle hidden game failed: '%v'\n", err)
+	}
+
+	excludeHiddenGames := false
+	games, err := getGames(configFileParentDir, excludeHiddenGames)
+	if err != nil {
+		t.Fatalf("save game failed: '%v'\n", err)
 	}
 
 	var b bytes.Buffer
-	err = listGamesNumbered(configFileParentDir, &b, ListCmdOptions{})
-	if err != nil {
-		t.Errorf("got: '%v'; want nil;\n", err)
-	}
-
-	capturedOutput := b.Bytes()
-	wantOutput := []byte("[0] Test Game\n")
-	if !bytes.Equal(capturedOutput, wantOutput) {
-		t.Errorf("got: '%s'; want '%s';\n", capturedOutput, wantOutput)
-	}
-}
-
-func Test_ListGamesNumbered_ConfigFileNotFound(t *testing.T) {
-	setupTestsDir(t)
-	pathToEmptyDir, err := os.MkdirTemp(testsDir, "emptyDir")
-	if err != nil {
-		t.Errorf("error creating temp dir: %v\n", err)
-	}
-
-	err = listGamesNumbered(pathToEmptyDir, nil, ListCmdOptions{})
-	if !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("got: '%v'; want '%v';\n", err, fs.ErrNotExist)
-	}
-}
-
-func Test_ListGamesNumbered_NoGamesFound(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-
-	err := listGamesNumbered(configFileParentDir, nil, ListCmdOptions{})
-	if !errors.Is(err, ErrNoGamesFound) {
-		t.Errorf("got: '%v'; want '%v';\n", err, ErrNoGamesFound)
-	}
-}
-
-func Test_ListGamesNumbered_DoesNotShowAHiddenGame(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
-
-	games := []Game{
-		{IsHidden: true, Name: "Test Game"},
-	}
-
-	configFileData, err := json.Marshal(games)
-	if err != nil {
-		t.Fatalf("marshal failed: '%v'\n", err)
-	}
-
-	err = os.WriteFile(pathToConfigFile, configFileData, os.ModePerm)
-	if err != nil {
-		t.Fatalf("write file failed: '%v'\n", err)
-	}
-
-	var b bytes.Buffer
-	cmdOptions := &ListCmdOptions{showHidden: false}
-	err = listGamesNumbered(configFileParentDir, &b, *cmdOptions)
+	err = listGamesNumbered(games, &b)
 	if err != nil {
 		t.Fatalf("got: '%v'; want nil;\n", err)
 	}
 
 	capturedOutput := b.Bytes()
-	wantOutput := []byte("")
+	wantOutput := []byte("[0] Test Game\n[1] Test Game [HIDDEN]\n")
 	if !bytes.Equal(capturedOutput, wantOutput) {
 		t.Fatalf("got: '%s'; want '%s';\n", capturedOutput, wantOutput)
 	}
 }
 
-func Test_ListGamesNumbered_OnlyShowsHiddenGames(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
+func Test_HideGamePrompt(t *testing.T) {
+	configFileParentDir := t.TempDir()
 
-	games := []Game{
-		{IsHidden: true, Name: "Test Game 1"},
-		{IsHidden: true, Name: "Test Game 2"},
-		{IsHidden: false, Name: "Test Game 3"},
-		{IsHidden: false, Name: "Test Game 4"},
-	}
-
-	configFileData, err := json.Marshal(games)
+	err := saveGameToConfig("Test Game", "Test Path", configFileParentDir)
 	if err != nil {
-		t.Fatalf("marshal failed: '%v'\n", err)
+		t.Fatalf("save game failed: '%v'\n", err)
 	}
 
-	err = os.WriteFile(pathToConfigFile, configFileData, os.ModePerm)
+	// Changing global variable from real user config directory to
+	// OS temp directory
+	origProgramHome := programHome
+	programHome = configFileParentDir
+	defer func() {
+		programHome = origProgramHome
+	}()
+	defer quietOutput()()
+
+	// Index in the slice, not Game.Id
+	userInput := bufio.NewReader(strings.NewReader("0\n"))
+	err = hideGamePrompt(userInput)
 	if err != nil {
-		t.Fatalf("write file failed: '%v'\n", err)
+		t.Fatalf("got '%v'; want nil;\n", err)
 	}
 
-	var b bytes.Buffer
-	cmdOptions := &ListCmdOptions{onlyShowHidden: true}
-	err = listGamesNumbered(configFileParentDir, &b, *cmdOptions)
+	games, err := getGames(configFileParentDir, false)
 	if err != nil {
-		t.Fatalf("got: '%v'; want nil;\n", err)
+		t.Fatalf("get games failed: '%v'\n", err)
 	}
 
-	capturedOutput := b.Bytes()
-	wantOutput := []byte("[0] Test Game 1\n[1] Test Game 2\n")
-	if !bytes.Equal(capturedOutput, wantOutput) {
-		t.Fatalf("got: '%s'; want '%s';\n", capturedOutput, wantOutput)
-	}
-}
-
-func Test_ListGamesNumbered_ShowsHiddenGameIndicators(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
-
-	games := []Game{
-		{IsHidden: true, Name: "Test Game 1"},
-		{IsHidden: true, Name: "Test Game 2"},
-		{IsHidden: false, Name: "Test Game 3"},
-		{IsHidden: false, Name: "Test Game 4"},
-	}
-
-	configFileData, err := json.Marshal(games)
-	if err != nil {
-		t.Fatalf("marshal failed: '%v'\n", err)
-	}
-
-	err = os.WriteFile(pathToConfigFile, configFileData, os.ModePerm)
-	if err != nil {
-		t.Fatalf("write file failed: '%v'\n", err)
-	}
-
-	var b bytes.Buffer
-	cmdOptions := &ListCmdOptions{showHidden: true, hiddenGameIndicator: true}
-	err = listGamesNumbered(configFileParentDir, &b, *cmdOptions)
-	if err != nil {
-		t.Fatalf("got: '%v'; want nil;\n", err)
-	}
-
-	capturedOutput := b.Bytes()
-	wantOutput := []byte("[0] Test Game 1 [HIDDEN]\n[1] Test Game 2 [HIDDEN]\n[2] Test Game 3\n[3] Test Game 4\n")
-	if !bytes.Equal(capturedOutput, wantOutput) {
-		t.Fatalf("got: '%s'; want '%s';\n", capturedOutput, wantOutput)
+	if !games[0].Hidden {
+		t.Fatalf("got '%t'; want '%t';\n", games[0].Hidden, true)
 	}
 }
 
 func Test_GetIntFromUser(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToConfigFile := filepath.Join(configFileParentDir, "config.json")
+	configFileParentDir := t.TempDir()
 
 	for range 6 {
-		// pathToExecutable accepts any path as long as it exists.
-		err := saveGameToConfig("Test Game", pathToConfigFile, configFileParentDir)
+		err := saveGameToConfig("Test Game", "Test Path", configFileParentDir)
 		if err != nil {
-			t.Errorf("error saving game to config: %v\n", err)
+			t.Fatalf("save game failed: '%v'\n", err)
 		}
 	}
 
@@ -360,103 +230,63 @@ func Test_GetIntFromUser(t *testing.T) {
 }
 
 func Test_ListGamesWithPlaytime_HappyPath(t *testing.T) {
-	setupTestsDir(t)
-	games := []Game{{
-		Name:             "Super Race 2",
-		PathToExecutable: "",
-		TimeSpentPlaying: "2h0m0s"}}
+	configFileParentDir := t.TempDir()
 
-	configFileData, err := json.Marshal(games)
+	pathToDb := filepath.Join(configFileParentDir, "data.db")
+	db, err := sql.Open("sqlite3", pathToDb)
 	if err != nil {
-		t.Errorf("error marshaling config file data: %v\n", err)
+		t.Fatalf("open db failed: '%v'\n", err)
 	}
-	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS games (id INTEGER PRIMARY KEY, name TEXT, path TEXT, playtime TEXT, hidden INTEGER)")
+	if err != nil {
+		t.Fatalf("create table failed: '%v'\n", err)
+	}
+
+	_, err = db.Exec("INSERT INTO games (name, path, playtime, hidden) VALUES(?, ?, ?, ?)",
+		"Test Game", "Test Path", "2h0m0s", false)
+	if err != nil {
+		t.Fatalf("query failed: '%v'\n", err)
+	}
 
 	var b bytes.Buffer
 	err = listGamesWithPlaytime(configFileParentDir, &b)
 	if err != nil {
-		t.Errorf("got '%v'; want nil;\n", err)
+		t.Fatalf("got '%v'; want nil;\n", err)
 	}
 
 	gotOutput := b.String()
-	if !strings.Contains(gotOutput, "Super Race 2") {
-		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, "Super Race 2")
+	if !strings.Contains(gotOutput, "Test Game") {
+		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, "Test Game")
 	}
 	if !strings.Contains(gotOutput, "2h0m0s") {
 		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, "2h0m0s")
 	}
 }
 
-func Test_ListGamesWithPlaytime_ChecksForTimeSpentEmptyString(t *testing.T) {
-	setupTestsDir(t)
-	games := []Game{{
-		Name:             "Super Race 2",
-		PathToExecutable: "",
-		TimeSpentPlaying: ""}}
-
-	configFileData, err := json.Marshal(games)
-	if err != nil {
-		t.Errorf("error marshaling config file data: %v\n", err)
-	}
-	configFileParentDir := createTempDirWithConfigFile(t, configFileData)
-
-	var b bytes.Buffer
-	err = listGamesWithPlaytime(configFileParentDir, &b)
-	if err != nil {
-		t.Errorf("got '%v'; want nil;\n", err)
-	}
-
-	gotOutput := b.String()
-	if !strings.Contains(gotOutput, "0h0m0s") {
-		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, "0h0m0s")
-	}
-}
-
 func Test_ListGamesWithLastPlayed_HappyPath(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToTempFile := createTempFileForTests(t)
-	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
+	configFileParentDir := t.TempDir()
+	pathToDb := filepath.Join(configFileParentDir, "data.db")
 
-	for i := range 3 {
-		err := saveGameToConfig("Test Game"+strconv.Itoa(i), pathToTempFile, configFileParentDir)
+	for range 2 {
+		err := saveGameToConfig("Test Game", "Test Path", configFileParentDir)
 		if err != nil {
-			t.Errorf("[%d] error saving game to config: %v\n", i, err)
+			t.Fatalf("save game failed: '%v'\n", err)
 		}
 	}
 
-	// Creating logs.json file with necessary data
-	time6DaysAgo := time.Now().AddDate(0, 0, -6)
-	timeToday := time.Now()
+	time6DaysAgo := time.Now().AddDate(0, 0, -6).Add(time.Duration(-20) * time.Minute)
+	time25MinutesAgo := time.Now().Add(time.Duration(-25) * time.Minute)
 
-	time6DaysAgoString := fmt.
-		Sprintf("[%s] Played '%s' from 12:24:30 to 12:30:00.\n",
-			time6DaysAgo.Format(time.DateOnly),
-			"Test Game1")
-	timeTodayString := fmt.
-		Sprintf("[%s] Played '%s' from 12:00:09 to 12:30:59.\n",
-			timeToday.Format(time.DateOnly),
-			"Test Game2")
-	// Removed/hidden because the game name is not in the config file.
-	// For testing to see if the function will include this in the output
-	// (It should not).
-	hiddenGameString := fmt.
-		Sprintf("[%s] Played '%s' from 12:00:00 to 12:30:00.\n",
-			timeToday.Format(time.DateOnly),
-			"Test Game5")
-
-	var sb strings.Builder
-	// Not checking for sb errors here because the test will fail
-	// if these are not right anyway.
-	sb.WriteString(time6DaysAgoString)
-	sb.WriteString(timeTodayString)
-	sb.WriteString(hiddenGameString)
-
-	logFileDataString := sb.String()
-
-	err := os.WriteFile(pathToLogFile, []byte(logFileDataString), os.ModePerm)
+	err := saveSession(1, time25MinutesAgo, time25MinutesAgo, pathToDb)
 	if err != nil {
-		t.Errorf("error writing to log file: %v\n", err)
+		t.Fatalf("save session failed: '%v'\n", err)
+	}
+
+	err = saveSession(2, time6DaysAgo, time6DaysAgo, pathToDb)
+	if err != nil {
+		t.Fatalf("save session failed: '%v'\n", err)
 	}
 
 	var b bytes.Buffer
@@ -465,172 +295,73 @@ func Test_ListGamesWithLastPlayed_HappyPath(t *testing.T) {
 		t.Errorf("got: '%v'; want nil;\n", err)
 	}
 
+	// Won't check for the "(x ago)" part
 	gotOutput := b.String()
-	if !strings.Contains(gotOutput, "Today") {
-		t.Errorf("got: \n'%s'; must contain: '%s';\n", gotOutput, "Today")
+	wantOutput1 := "Today"
+	wantOutput2 := time6DaysAgo.Format(time.DateOnly)
+
+	if !strings.Contains(gotOutput, wantOutput1) {
+		t.Errorf("got: \n'%s'; must contain: '%s';\n", gotOutput, wantOutput1)
 	}
-	if !strings.Contains(gotOutput, "6 days ago") {
-		t.Errorf("got: \n'%s'; must contain: '%s';\n", gotOutput, "6 days ago")
-	}
-	if strings.Contains(gotOutput, "Test Game5") {
-		t.Errorf("got: \n'%s'; must NOT contain: '%s';\n", gotOutput, "Test Game5")
-	}
-}
-
-func Test_ListGamesWithLastPlayed_NoGamesFound(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
-
-	err := os.WriteFile(pathToLogFile, nil, os.ModePerm)
-	if err != nil {
-		t.Errorf("error writing to log file: %v\n", err)
-	}
-
-	var b bytes.Buffer
-	err = listGamesWithLastPlayed(configFileParentDir, &b)
-	if err != nil {
-		t.Errorf("got: '%v'; want nil;\n", err)
-	}
-
-	gotOutput := b.String()
-	wantOutput := "No games found in log file.\n"
-	if gotOutput != wantOutput {
-		t.Errorf("got: '%s'; want: '%s';\n", gotOutput, wantOutput)
-	}
-}
-
-func Test_ListGamesWithLastPlayed_Prints1DayAgo(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToTempFile := createTempFileForTests(t)
-	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
-
-	err := saveGameToConfig("Test Game", pathToTempFile, configFileParentDir)
-	if err != nil {
-		t.Errorf("error saving game to config: %v\n", err)
-	}
-
-	// Creating logs.json file with necessary data
-	time1DayAgo := time.Now().AddDate(0, 0, -1)
-
-	time1DayAgoString := fmt.
-		Sprintf("[%s] Played '%s' from 12:00:00 to 12:30:20.\n",
-			time1DayAgo.Format(time.DateOnly),
-			"Test Game")
-
-	err = os.WriteFile(pathToLogFile, []byte(time1DayAgoString), os.ModePerm)
-	if err != nil {
-		t.Errorf("error writing to log file: %v\n", err)
-	}
-
-	var b bytes.Buffer
-	err = listGamesWithLastPlayed(configFileParentDir, &b)
-	if err != nil {
-		t.Errorf("got: '%v'; want nil;\n", err)
-	}
-
-	gotOutput := b.String()
-	if !strings.Contains(gotOutput, "1 day ago") {
-		t.Errorf("got: \n'%s'; must contain: '%s';\n",
-			gotOutput, "1 day ago")
+	if !strings.Contains(gotOutput, wantOutput2) {
+		t.Errorf("got: \n'%s'; must contain: '%s';\n", gotOutput, wantOutput2)
 	}
 }
 
 func Test_ListGamesWithPlaytimeLastTwoWeeks_HappyPath(t *testing.T) {
-	setupTestsDir(t)
-	configFileParentDir := createTempDirWithConfigFile(t, nil)
-	pathToLogFile := filepath.Join(configFileParentDir, "logs.json")
-	pathToTempFile := createTempFileForTests(t)
+	configFileParentDir := t.TempDir()
+	pathToDb := filepath.Join(configFileParentDir, "data.db")
 
-	for i := 1; i < 4; i++ {
-		err := saveGameToConfig(
-			"Test Game "+strconv.Itoa(i),
-			pathToTempFile,
-			configFileParentDir)
-		if err != nil {
-			t.Errorf("[%d] error saving game to config: %v\n", i, err)
-		}
+	err := saveGameToConfig("Test Game", "Test Path", configFileParentDir)
+	if err != nil {
+		t.Fatalf("save game failed: '%v'\n", err)
 	}
 
-	// These dates have to be in the last two weeks.
-	timeNow := time.Now().UTC()
-	time1DayLater := timeNow.AddDate(0, 0, 1)
-
-	logEntry4HoursPlayed := fmt.
-		Sprintf("[%s] Played 'Test Game 1' from 08:00:30 to 12:00:59.\n",
-			timeNow.Format(time.DateOnly))
-	logEntry8HoursPlayed := fmt.
-		Sprintf("[%s] Played 'Test Game 2' from 08:00:09 to 16:00:20.\n",
-			timeNow.Format(time.DateOnly))
-	logEntry24HoursPlayed := fmt.
-		Sprintf("[%s] Played 'Test Game 3' from 08:00:21 to %s 08:00:34.\n",
-			timeNow.Format(time.DateOnly),
-			time1DayLater.Format(time.DateOnly))
-
-	// Not checking for write errors, if this fails the test will fail too.
-	var sb strings.Builder
-	sb.WriteString(logEntry4HoursPlayed)
-	sb.WriteString(logEntry8HoursPlayed)
-	sb.WriteString(logEntry24HoursPlayed)
-
-	err := os.WriteFile(pathToLogFile, []byte(sb.String()), os.ModePerm)
+	err = saveGameToConfig("Test Game 2", "Test Path", configFileParentDir)
 	if err != nil {
-		t.Errorf("error writing to log file: %v\n", err)
+		t.Fatalf("save game failed: '%v'\n", err)
+	}
+
+	timeNow := time.Now()
+	time1 := timeNow.AddDate(0, 0, -3)
+	time1End := time1.Add(4 * time.Hour)
+	time2 := timeNow.AddDate(0, 0, -6)
+	time2End := time2.Add(6*time.Hour + 34*time.Second)
+
+	err = saveSession(1, time1, time1End, pathToDb)
+	if err != nil {
+		t.Fatalf("save session failed: '%v'\n", err)
+	}
+
+	err = saveSession(1, time2, time2End, pathToDb)
+	if err != nil {
+		t.Fatalf("save session failed: '%v'\n", err)
+	}
+
+	err = saveSession(2, time2, time2.Add(2*time.Hour), pathToDb)
+	if err != nil {
+		t.Fatalf("save session failed: '%v'\n", err)
 	}
 
 	var b bytes.Buffer
 	err = listGamesWithPlaytimeLastTwoWeeks(configFileParentDir, &b)
 	if err != nil {
-		t.Errorf("got '%v'; want nil;\n", err)
+		t.Fatalf("got '%v'; want nil;\n", err)
 	}
 
 	gotOutput := b.String()
-	totalHours := "36h0m53s spent playing last two weeks."
+	totalHours := "12h0m34s spent playing last two weeks."
 	if !strings.Contains(gotOutput, totalHours) {
 		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, totalHours)
 	}
 
-	game1 := "Test Game 1"
-	playtime1 := "4h0m29s (11.1%)"
-	if !strings.Contains(gotOutput, game1) {
-		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, game1)
-	}
+	playtime1 := "10h0m34s (83.3%)"
 	if !strings.Contains(gotOutput, playtime1) {
 		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, playtime1)
 	}
 
-	game2 := "Test Game 2"
-	playtime2 := "8h0m11s (22.2%)"
-	if !strings.Contains(gotOutput, game2) {
-		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, game2)
-	}
+	playtime2 := "2h0m0s (16.7%)"
 	if !strings.Contains(gotOutput, playtime2) {
 		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, playtime2)
 	}
-
-	game3 := "Test Game 3"
-	playtime3 := "24h0m13s (66.6%)"
-	if !strings.Contains(gotOutput, game3) {
-		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, game3)
-	}
-	if !strings.Contains(gotOutput, playtime3) {
-		t.Errorf("got: '%s'; must contain: '%s';\n", gotOutput, playtime3)
-	}
-}
-
-// Creates a directory and a file inside it, both are named with name + random numbers.
-func setupAddGamePromptTest(t *testing.T, name string) *os.File {
-	tempDir, err := os.MkdirTemp(testsDir, name)
-	if err != nil {
-		t.Errorf("error creating temp dir: %v\n", err)
-	}
-
-	tempFile, err := os.CreateTemp(tempDir, name)
-	if err != nil {
-		t.Errorf("error creating temp file: %v\n", err)
-	}
-	tempFile.Close()
-
-	return tempFile
 }
